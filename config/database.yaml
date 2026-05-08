@@ -1,0 +1,28 @@
+database:
+  host: "localhost"
+  port: 5432
+  name: "ders"
+  user: "postgres"
+  password: "1970"
+
+extensions:
+  pgcrypto: true
+  vector: true
+
+schema:
+  public_schema: "public"
+
+tables:
+  semantic_index: "semantic_index"
+
+sql_files:
+  schema: "sql/01_schema.sql"
+  semantic_index: "sql/02_semantic_index.sql"
+  embedding_views: "sql/03_embedding_views.sql"
+
+seed_files:
+  - "sql/seed/01_seed_markalar_kategoriler.sql"
+  - "sql/seed/02_seed_musteriler_adresler.sql"
+  - "sql/seed/03_seed_urunler.sql"
+  - "sql/seed/04_seed_siparisler.sql"
+  - "sql/seed/05_seed_yorumlar_iadeler_kuponlar.sql"

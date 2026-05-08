@@ -1,0 +1,28 @@
+model:
+  base_model_name: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  fine_tuned_model_path: "models/ecommerce-semantic-model"
+  embedding_dimension: 384
+  normalize_embeddings: true
+  device: "auto"
+
+tokenizer:
+  show_tokens: true
+  show_token_ids: true
+  show_attention_mask: true
+  max_length: 128
+  truncation: true
+  padding: "max_length"
+
+training:
+  train_dataset_path: "data/training_pairs.jsonl"
+  output_dir: "models/ecommerce-semantic-model"
+  epochs: 3
+  batch_size: 16
+  learning_rate: 0.00002
+  warmup_ratio: 0.1
+  evaluation_steps: 100
+  save_steps: 100
+  random_seed: 42
+
+loss:
+  name: "MultipleNegativesRankingLoss"

@@ -1,0 +1,8 @@
+psycopg[binary]
+pgvector
+pyyaml
+sentence-transformers
+python-dotenv
+numpy
+pandas
+tqdm

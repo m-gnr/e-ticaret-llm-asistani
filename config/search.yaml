@@ -1,0 +1,192 @@
+search:
+  default_limit: 5
+  max_limit: 20
+  similarity_metric: "cosine"
+  min_similarity_score: 0.30
+
+query_parser:
+  enable_price_filter: true
+  enable_stock_filter: true
+  enable_table_filter: true
+  enable_status_filter: true
+  enable_brand_filter: true
+  enable_category_filter: true
+
+filters:
+  price:
+    currency: "TRY"
+    max_price_patterns:
+      - "(\\d+)\\s*tl\\s*altı"
+      - "(\\d+)\\s*tl\\s*altında"
+      - "(\\d+)\\s*tl\\s*aşağısı"
+      - "en fazla\\s*(\\d+)\\s*tl"
+      - "maksimum\\s*(\\d+)\\s*tl"
+      - "(\\d+)\\s*tl\\s*ye\\s*kadar"
+
+    min_price_patterns:
+      - "(\\d+)\\s*tl\\s*üstü"
+      - "(\\d+)\\s*tl\\s*üzeri"
+      - "en az\\s*(\\d+)\\s*tl"
+      - "minimum\\s*(\\d+)\\s*tl"
+
+  stock:
+    in_stock_keywords:
+      - "stokta"
+      - "stokta olan"
+      - "mevcut"
+      - "elde olan"
+      - "hazır"
+      - "satışta"
+
+    out_of_stock_keywords:
+      - "stokta olmayan"
+      - "tükenen"
+      - "bitmiş"
+      - "elde olmayan"
+
+  tables:
+    product:
+      source_tables:
+        - "urunler"
+        - "urun_varyantlari"
+        - "stok"
+        - "urun_kategorileri"
+      keywords:
+        - "ürün"
+        - "urun"
+        - "kulaklık"
+        - "klavye"
+        - "mouse"
+        - "laptop"
+        - "telefon"
+        - "saat"
+        - "şarj"
+        - "kahve makinesi"
+
+    order:
+      source_tables:
+        - "siparisler"
+        - "siparis_ogeleri"
+        - "odemeler"
+        - "kargolar"
+      keywords:
+        - "sipariş"
+        - "siparis"
+        - "ödeme"
+        - "odeme"
+        - "kargo"
+        - "teslimat"
+        - "takip"
+
+    review:
+      source_tables:
+        - "urun_yorumlari"
+      keywords:
+        - "yorum"
+        - "puan"
+        - "değerlendirme"
+        - "memnuniyet"
+        - "beğenilmiş"
+        - "şikayet"
+
+    return:
+      source_tables:
+        - "iadeler"
+        - "iade_ogeleri"
+      keywords:
+        - "iade"
+        - "hasarlı"
+        - "kusurlu"
+        - "geri gönder"
+        - "iptal"
+
+    customer:
+      source_tables:
+        - "musteriler"
+        - "musteri_adresleri"
+      keywords:
+        - "müşteri"
+        - "musteri"
+        - "adres"
+        - "kullanıcı"
+        - "kullanici"
+
+    coupon:
+      source_tables:
+        - "kuponlar"
+        - "siparis_indirimleri"
+      keywords:
+        - "kupon"
+        - "indirim"
+        - "kampanya"
+
+  status:
+    order_status:
+      olusturuldu:
+        - "oluşturuldu"
+        - "olusturuldu"
+        - "yeni sipariş"
+      onaylandi:
+        - "onaylandı"
+        - "onaylandi"
+      hazirlaniyor:
+        - "hazırlanıyor"
+        - "hazirlaniyor"
+      kargoya_verildi:
+        - "kargoya verildi"
+        - "kargoda"
+      teslim_edildi:
+        - "teslim edildi"
+        - "teslim"
+      iptal_edildi:
+        - "iptal edildi"
+        - "iptal"
+      iade_edildi:
+        - "iade edildi"
+
+    payment_status:
+      beklemede:
+        - "ödeme beklemede"
+        - "beklemede"
+      basarili:
+        - "ödeme başarılı"
+        - "basarili"
+        - "başarılı ödeme"
+      basarisiz:
+        - "ödeme başarısız"
+        - "basarisiz"
+      iade_edildi:
+        - "ödeme iade edildi"
+
+    cargo_status:
+      olusturuldu:
+        - "kargo oluşturuldu"
+      hazirlaniyor:
+        - "kargo hazırlanıyor"
+      kargoya_verildi:
+        - "kargoya verildi"
+      yolda:
+        - "yolda"
+        - "kargo yolda"
+      teslim_edildi:
+        - "teslim edildi"
+      iade_edildi:
+        - "kargo iade edildi"
+
+semantic_index:
+  source_table_column: "kaynak_tablo"
+  source_id_column: "kaynak_id"
+  title_column: "baslik"
+  content_column: "icerik"
+  metadata_column: "metadata"
+  embedding_column: "embedding"
+
+ranking:
+  use_metadata_filters_first: true
+  use_semantic_score: true
+  use_text_match_boost: true
+
+  weights:
+    semantic_similarity: 0.80
+    keyword_match: 0.15
+    metadata_match: 0.05
