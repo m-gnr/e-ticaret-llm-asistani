@@ -14,6 +14,8 @@ class ParsedQuery:
     in_stock_only: bool = False
     out_of_stock_only: bool = False
     min_rating: int | None = None
+    max_rating: int | None = None
+    rating_equals: int | None = None
     category: str | None = None
     brand: str | None = None
     status: str | None = None
@@ -506,6 +508,8 @@ STATUS_KEYWORDS = {
 
 
 SORT_PATTERNS = [
+    ("rating", "asc", ["düşük puanlı", "dusuk puanli", "düşük yıldızlı", "dusuk yildizli", "kötü yorumlar", "kotu yorumlar", "en kötü yorumlar", "en kotu yorumlar", "olumsuz yorumlar", "kötü puanlı", "kotu puanli", "az puanlı", "az puanli"]),
+    ("rating", "desc", ["yüksek puanlı", "yuksek puanli", "iyi yorumlar", "en iyi yorumlar", "olumlu yorumlar", "iyi puanlı", "iyi puanli", "çok beğenilen", "cok begenilen"]),
     ("price", "desc", ["en pahalı", "pahalı", "yüksek fiyatlı", "yuksek fiyatli", "fiyatı yüksek", "fiyati yuksek"]),
     ("price", "asc", ["en ucuz", "ucuz", "uygun fiyatlı", "uygun fiyatli", "düşük fiyatlı", "dusuk fiyatli"]),
 ]
@@ -863,10 +867,11 @@ def extract_stock_filter(text: str) -> tuple[bool, bool]:
 
 def extract_min_rating(text: str) -> int | None:
     patterns = [
-        r"en az\s*(\d)\s*puan",
-        r"(\d)\s*puan\s*üstü",
-        r"(\d)\s*puan\s*üzeri",
-        r"minimum\s*(\d)\s*puan",
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s*üstü\b",
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s*ve\s*üzeri\b",
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s*üzeri\b",
+        r"en az\s*([1-5])\s*(puan|yıldız|yildiz)",
+        r"minimum\s*([1-5])\s*(puan|yıldız|yildiz)",
     ]
 
     for pattern in patterns:
@@ -877,6 +882,9 @@ def extract_min_rating(text: str) -> int | None:
     high_rating_keywords = [
         "yüksek puanlı",
         "yuksek puanli",
+        "iyi yorumlar",
+        "en iyi yorumlar",
+        "olumlu yorumlar",
         "iyi yorumlu",
         "olumlu yorumlu",
         "çok beğenilen",
@@ -887,6 +895,59 @@ def extract_min_rating(text: str) -> int | None:
 
     if any(keyword in text for keyword in high_rating_keywords):
         return 4
+
+    return None
+
+
+def extract_max_rating(text: str) -> int | None:
+    patterns = [
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s*altı\b",
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s*ve\s*altı\b",
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s*altında\b",
+        r"en fazla\s*([1-5])\s*(puan|yıldız|yildiz)",
+        r"maksimum\s*([1-5])\s*(puan|yıldız|yildiz)",
+        r"max\s*([1-5])\s*(puan|yıldız|yildiz)",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group(1))
+
+    low_rating_keywords = [
+        "düşük puanlı",
+        "dusuk puanli",
+        "düşük yıldızlı",
+        "dusuk yildizli",
+        "kötü yorumlar",
+        "kotu yorumlar",
+        "en kötü yorumlar",
+        "en kotu yorumlar",
+        "olumsuz yorumlar",
+        "kötü puanlı",
+        "kotu puanli",
+        "olumsuz yorumlu",
+        "az puanlı",
+        "az puanli",
+    ]
+
+    if any(keyword in text for keyword in low_rating_keywords):
+        return 2
+
+    return None
+
+
+def extract_rating_equals(text: str) -> int | None:
+    patterns = [
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s+(yorum|yorumlar|değerlendirme|degerlendirme)\b",
+        r"\b([1-5])\s*(puan|yıldız|yildiz)\s*$",
+        r"\b([1-5])\s*(puanlı|puanli|yıldızlı|yildizli)\s*(yorum|yorumlar)?\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group(1))
 
     return None
 
@@ -987,7 +1048,9 @@ def parse_query(query: str) -> ParsedQuery:
     max_price = range_max_price if range_max_price is not None else extract_max_price(normalized)
     min_price = range_min_price if range_min_price is not None else extract_min_price(normalized)
     in_stock_only, out_of_stock_only = extract_stock_filter(normalized)
-    min_rating = extract_min_rating(normalized)
+    rating_equals = extract_rating_equals(normalized)
+    min_rating = None if rating_equals is not None else extract_min_rating(normalized)
+    max_rating = None if rating_equals is not None else extract_max_rating(normalized)
     category = detect_category(normalized)
     brand = detect_brand(normalized)
     status = detect_status(normalized)
@@ -1014,6 +1077,8 @@ def parse_query(query: str) -> ParsedQuery:
         in_stock_only=in_stock_only,
         out_of_stock_only=out_of_stock_only,
         min_rating=min_rating,
+        max_rating=max_rating,
+        rating_equals=rating_equals,
         category=category,
         brand=brand,
         status=status,
@@ -1075,6 +1140,24 @@ def run_demo() -> None:
         "en ucuz laptop",
         "pahalı iphone",
         "10000 40000 tl arası en pahalı iphone",
+        "iphone 11 yorumları",
+        "iphone 11 için yorumlar",
+        "samsung s23 yorumları",
+        "macbook air m2 yorumları",
+        "düşük puanlı iphone yorumları",
+        "yüksek puanlı samsung yorumları",
+        "kötü yorumlar",
+        "en kötü yorumlar",
+        "olumsuz yorumlar",
+        "düşük puanlı yorumlar",
+        "düşük puanlı ayakkabı yorumları",
+        "1 yıldız yorumlar",
+        "2 yıldızlı yorumlar",
+        "3 puanlı yorumlar",
+        "5 yıldız yorumlar",
+        "3 puan altı yorumlar",
+        "2 puan ve altı yorumlar",
+        "4 puan ve üzeri yorumlar",
         "hasarlı gelen ürün iadelerini göster",
         "teslim edilen kargoları listele",
         "oyuncu mouse öner",

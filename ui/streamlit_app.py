@@ -692,11 +692,14 @@ def render_parsed_query(parsed_query: Any) -> None:
             st.write("**Intent:**", parsed_query.intent)
             st.write("**Kategori:**", parsed_query.category)
             st.write("**Marka:**", parsed_query.brand)
+            st.write("**Model filtre:**", parsed_query.model_filter or "Yok")
 
         with col2:
             st.write("**Max fiyat:**", parsed_query.max_price)
             st.write("**Min fiyat:**", parsed_query.min_price)
             st.write("**Min puan:**", parsed_query.min_rating)
+            st.write("**Max puan:**", parsed_query.max_rating)
+            st.write("**Eşit puan:**", parsed_query.rating_equals or "Yok")
 
         with col3:
             st.write("**Stokta:**", parsed_query.in_stock_only)

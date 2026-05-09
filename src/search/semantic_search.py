@@ -91,6 +91,14 @@ def build_filter_conditions(parsed_query: ParsedQuery) -> tuple[list[str], dict[
         conditions.append("(metadata->>'puan')::integer >= %(min_rating)s")
         params["min_rating"] = parsed_query.min_rating
 
+    if parsed_query.max_rating is not None:
+        conditions.append("(metadata->>'puan')::integer <= %(max_rating)s")
+        params["max_rating"] = parsed_query.max_rating
+
+    if parsed_query.rating_equals is not None:
+        conditions.append("(metadata->>'puan')::integer = %(rating_equals)s")
+        params["rating_equals"] = parsed_query.rating_equals
+
     if parsed_query.brand is not None:
         conditions.append("LOWER(metadata->>'marka') = %(brand)s")
         params["brand"] = parsed_query.brand.lower()
@@ -128,7 +136,18 @@ def build_filter_conditions(parsed_query: ParsedQuery) -> tuple[list[str], dict[
         params["status"] = parsed_query.status
 
     if parsed_query.model_filter is not None:
-        conditions.append("LOWER(baslik) LIKE LOWER(%(model_filter)s)")
+        conditions.append(
+            """
+            (
+                LOWER(baslik) LIKE LOWER(%(model_filter)s)
+                OR LOWER(icerik) LIKE LOWER(%(model_filter)s)
+                OR LOWER(metadata->>'urun_adi') LIKE LOWER(%(model_filter)s)
+                OR LOWER(metadata->>'urun') LIKE LOWER(%(model_filter)s)
+                OR LOWER(metadata->>'baslik') LIKE LOWER(%(model_filter)s)
+                OR LOWER(metadata::text) LIKE LOWER(%(model_filter)s)
+            )
+            """
+        )
         params["model_filter"] = f"%{parsed_query.model_filter}%"
 
     for key, value in parsed_query.attribute_filters.items():
@@ -153,6 +172,10 @@ def build_order_by_clause(parsed_query: ParsedQuery) -> str:
     if parsed_query.sort_by == "price":
         direction = "DESC" if parsed_query.sort_direction == "desc" else "ASC"
         return f"price {direction} NULLS LAST, distance ASC"
+
+    if parsed_query.sort_by == "rating":
+        direction = "DESC" if parsed_query.sort_direction == "desc" else "ASC"
+        return f"rating {direction} NULLS LAST, distance ASC"
 
     return "distance ASC"
 
@@ -205,7 +228,8 @@ def semantic_search(
             icerik,
             metadata,
             embedding <=> %(query_embedding)s AS distance,
-            NULLIF(metadata->>'satis_fiyati', '')::numeric AS price
+            NULLIF(metadata->>'satis_fiyati', '')::numeric AS price,
+            NULLIF(metadata->>'puan', '')::integer AS rating
         FROM public.semantic_index
         WHERE {where_sql}
         ORDER BY {order_by_sql}
@@ -307,6 +331,24 @@ def run_demo() -> None:
         "teslim edilen kargoları listele",
         "hasarlı gelen ürün iadelerini göster",
         "yüksek puanlı ayakkabı yorumları",
+        "iphone 11 yorumları",
+        "iphone 11 için yorumlar",
+        "samsung s23 yorumları",
+        "macbook air m2 yorumları",
+        "düşük puanlı iphone yorumları",
+        "yüksek puanlı samsung yorumları",
+        "kötü yorumlar",
+        "en kötü yorumlar",
+        "olumsuz yorumlar",
+        "düşük puanlı yorumlar",
+        "düşük puanlı ayakkabı yorumları",
+        "1 yıldız yorumlar",
+        "2 yıldızlı yorumlar",
+        "3 puanlı yorumlar",
+        "5 yıldız yorumlar",
+        "3 puan altı yorumlar",
+        "2 puan ve altı yorumlar",
+        "4 puan ve üzeri yorumlar",
     ]
 
     for query in test_queries:
