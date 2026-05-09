@@ -313,29 +313,96 @@ def inject_css() -> None:
 
             .result-card {
                 border: 1px solid #b8c7e6;
+                border-bottom-color: #9db5e9;
                 background: #f7faff;
-                padding: 13px 15px;
-                margin-bottom: 12px;
-                box-shadow: 2px 2px 0 rgba(0,0,0,0.08);
+                padding: 10px 12px;
+                margin-bottom: 8px;
+                box-shadow: inset 1px 1px white;
+            }
+
+            .result-card-topline {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 10px;
+                margin-bottom: 4px;
+            }
+
+            .result-title-wrap {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                min-width: 0;
+            }
+
+            .result-icon {
+                font-size: 14px;
+                line-height: 1;
             }
 
             .result-card-title {
                 font-weight: bold;
                 color: #003c9e;
-                font-size: 16px;
-                margin-bottom: 6px;
+                font-size: 15px;
+                line-height: 1.25;
             }
 
-            .result-meta {
+            .score-badge {
+                background: #fff8cf;
+                border: 1px solid #d6c77a;
+                color: #4a4218;
+                font-size: 12px;
+                white-space: nowrap;
+                padding: 2px 6px;
+            }
+
+            .result-source {
                 color: #333;
-                font-size: 13px;
-                margin-bottom: 8px;
+                font-size: 12px;
+                margin-bottom: 7px;
+            }
+
+            .metadata-chips {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin: 5px 0 7px 0;
+            }
+
+            .metadata-chip {
+                background: #ece9d8;
+                border: 1px solid #aaa;
+                color: #1f3763;
+                font-size: 12px;
+                padding: 2px 6px;
+                box-shadow: inset 1px 1px white;
             }
 
             .result-content {
                 color: #444;
                 font-size: 13px;
-                line-height: 1.4;
+                line-height: 1.5;
+            }
+
+            .price-lines {
+                color: #222;
+                font-size: 13px;
+                line-height: 1.55;
+                margin: 6px 0;
+            }
+
+            .feature-line {
+                color: #555;
+                font-size: 12px;
+                line-height: 1.5;
+                margin: 5px 0;
+            }
+
+            .product-description {
+                color: #333;
+                font-size: 14px;
+                line-height: 1.45;
+                margin-top: 10px;
             }
 
             div[data-testid="stTextInput"] input {
@@ -455,6 +522,9 @@ def init_session_state() -> None:
     defaults = {
         "query": "",
         "query_input": "",
+        "pending_query": "",
+        "pending_limit": 5,
+        "search_in_progress": False,
         "results": [],
         "parsed_query": None,
         "answer": "",
@@ -469,10 +539,22 @@ def init_session_state() -> None:
 def clear_search_state() -> None:
     st.session_state.query = ""
     st.session_state.query_input = ""
+    st.session_state.pending_query = ""
+    st.session_state.pending_limit = 5
+    st.session_state.search_in_progress = False
     st.session_state.results = []
     st.session_state.parsed_query = None
     st.session_state.answer = ""
     st.session_state.rover_state = "idle"
+
+
+def queue_search(query: str, limit: int) -> None:
+    st.session_state.query = query
+    st.session_state.pending_query = query
+    st.session_state.pending_limit = limit
+    st.session_state.search_in_progress = True
+    st.session_state.rover_state = "searching"
+    st.rerun()
 
 
 def render_xp_header() -> None:
@@ -617,11 +699,155 @@ def render_parsed_query(parsed_query: Any) -> None:
         st.write("**Kaynak tablolar:**", parsed_query.source_tables)
 
 
-def shorten_text(text: str, max_length: int = 360) -> str:
+def shorten_text(text: str, max_length: int = 240) -> str:
     if len(text) <= max_length:
         return text
 
     return text[:max_length] + "..."
+
+
+def format_price(value: Any, currency: str | None = None) -> str:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return ""
+
+    formatted = f"{number:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"{formatted} {currency or 'TRY'}"
+
+
+def format_feature_key(key: str) -> str:
+    known_keys = {
+        "renk": "Renk",
+        "baglanti": "Bağlantı",
+        "pil_suresi": "Pil süresi",
+        "gurultu_azaltma": "Gürültü azaltma",
+    }
+
+    if key in known_keys:
+        return known_keys[key]
+
+    return key.replace("_", " ").capitalize()
+
+
+def format_feature_value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "Var" if value else "Yok"
+
+    return str(value)
+
+
+def format_features(features: Any) -> str:
+    if not isinstance(features, dict) or not features:
+        return ""
+
+    formatted_features = [
+        f"{format_feature_key(str(key))}: {format_feature_value(value)}"
+        for key, value in features.items()
+    ]
+    return " · ".join(formatted_features)
+
+
+def format_metadata_chips(metadata: dict[str, Any]) -> str:
+    chip_values = []
+
+    for key in ("marka", "kategori", "varyant"):
+        value = metadata.get(key)
+        if value:
+            chip_values.append(str(value))
+
+    stock = metadata.get("stok")
+    if stock is not None:
+        chip_values.append(f"Stok: {stock}")
+
+    if not chip_values:
+        return ""
+
+    chips = "".join(f'<span class="metadata-chip">{value}</span>' for value in chip_values)
+    return f'<div class="metadata-chips">{chips}</div>'
+
+
+def get_product_description(metadata: dict[str, Any]) -> str:
+    for key in ("aciklama", "urun_aciklama", "urun_aciklamasi", "description"):
+        value = metadata.get(key)
+        if value:
+            return shorten_text(str(value), max_length=200)
+
+    return ""
+
+
+def render_product_result_card(result: dict[str, Any], index: int) -> None:
+    metadata = result.get("metadata") or {}
+    title = result.get("baslik", "Başlıksız")
+    source_table = result.get("kaynak_tablo", "-")
+    score = result.get("similarity_score", 0)
+    currency = metadata.get("para_birimi", "TRY")
+    sku = metadata.get("sku")
+    sale_price = format_price(metadata.get("satis_fiyati"), currency)
+    list_price = format_price(metadata.get("liste_fiyati"), currency)
+    features = format_features(metadata.get("ozellikler"))
+    description = get_product_description(metadata)
+    metadata_chips = format_metadata_chips(metadata)
+
+    body_parts = []
+    price_lines = []
+
+    if sale_price:
+        price_lines.append(f"<div><b>Satış fiyatı:</b> {sale_price}</div>")
+    if list_price:
+        price_lines.append(f"<div><b>Liste fiyatı:</b> {list_price}</div>")
+    if price_lines:
+        body_parts.append(f'<div class="price-lines">{"".join(price_lines)}</div>')
+    if features:
+        body_parts.append(f'<div class="feature-line"><b>Özellikler:</b> {features}</div>')
+    if description:
+        body_parts.append(f'<div class="product-description"><b>Açıklama:</b> {description}</div>')
+
+    source_text = f"Kaynak: <b>{source_table}</b>"
+    if sku:
+        source_text = f"{source_text} | SKU: <b>{sku}</b>"
+
+    st.markdown(
+        f"""
+        <div class="result-card">
+            <div class="result-card-topline">
+                <div class="result-title-wrap">
+                    <span class="result-icon">📄</span>
+                    <span class="result-card-title">{index}. {title}</span>
+                </div>
+                <span class="score-badge">Skor: {score:.4f}</span>
+            </div>
+            <div class="result-source">{source_text}</div>
+            {metadata_chips}
+            {"".join(body_parts)}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_generic_result_card(result: dict[str, Any], index: int) -> None:
+    title = result.get("baslik", "Başlıksız")
+    source_table = result.get("kaynak_tablo", "-")
+    score = result.get("similarity_score", 0)
+    content = shorten_text(result.get("icerik", ""), max_length=220)
+
+    st.markdown(
+        f"""
+        <div class="result-card">
+            <div class="result-card-topline">
+                <div class="result-title-wrap">
+                    <span class="result-icon">📄</span>
+                    <span class="result-card-title">{index}. {title}</span>
+                </div>
+                <span class="score-badge">Skor: {score:.4f}</span>
+            </div>
+            <div class="result-source">Kaynak: <b>{source_table}</b></div>
+            <div class="result-content">{content}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_result_cards(results: list[dict[str, Any]]) -> None:
@@ -631,24 +857,10 @@ def render_result_cards(results: list[dict[str, Any]]) -> None:
     st.markdown("### Kaynak Sonuçlar")
 
     for index, result in enumerate(results, start=1):
-        title = result.get("baslik", "Başlıksız")
-        source_table = result.get("kaynak_tablo", "-")
-        score = result.get("similarity_score", 0)
-        content = shorten_text(result.get("icerik", ""))
-
-        st.markdown(
-            f"""
-            <div class="result-card">
-                <div class="result-card-title">{index}. {title}</div>
-                <div class="result-meta">
-                    Kaynak tablo: <b>{source_table}</b> |
-                    Benzerlik skoru: <b>{score:.4f}</b>
-                </div>
-                <div class="result-content">{content}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        if result.get("kaynak_tablo") == "urun_varyantlari":
+            render_product_result_card(result, index)
+        else:
+            render_generic_result_card(result, index)
 
 
 def render_metadata(results: list[dict[str, Any]]) -> None:
@@ -672,7 +884,6 @@ def render_right_panel(show_debug: bool) -> None:
 
 def run_search(query: str, limit: int) -> None:
     st.session_state.query = query
-    st.session_state.rover_state = "searching"
 
     parsed_query = parse_query(query)
 
@@ -689,6 +900,25 @@ def run_search(query: str, limit: int) -> None:
     st.session_state.results = results
     st.session_state.answer = answer
     st.session_state.rover_state = "result" if results else "not_found"
+    st.session_state.search_in_progress = False
+    st.session_state.pending_query = ""
+    st.session_state.pending_limit = 5
+
+
+def run_pending_search_if_needed() -> None:
+    if not st.session_state.search_in_progress:
+        return
+
+    query = st.session_state.pending_query
+    limit = st.session_state.pending_limit
+
+    if not query:
+        st.session_state.search_in_progress = False
+        st.session_state.rover_state = "idle"
+        return
+
+    run_search(query=query, limit=limit)
+    st.rerun()
 
 
 def main() -> None:
@@ -709,10 +939,12 @@ def main() -> None:
         query, result_limit, should_search, show_debug = render_left_panel()
 
     if should_search:
-        run_search(query=query.strip(), limit=result_limit)
+        queue_search(query=query.strip(), limit=result_limit)
 
     with right_col:
         render_right_panel(show_debug)
+
+    run_pending_search_if_needed()
 
 
 if __name__ == "__main__":
