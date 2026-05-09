@@ -16,7 +16,7 @@ tokenizer:
 training:
   train_dataset_path: "data/training_pairs.jsonl"
   output_dir: "models/ecommerce-semantic-model"
-  epochs: 3
+  epochs: 1
   batch_size: 16
   learning_rate: 0.00002
   warmup_ratio: 0.1

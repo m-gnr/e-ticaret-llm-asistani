@@ -1,9 +1,10 @@
+from pathlib import Path
 from typing import Iterable
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-from src.config_loader import load_yaml_config
+from src.config_loader import get_project_root, load_yaml_config
 
 
 def get_model_config() -> dict:
@@ -22,20 +23,44 @@ def get_tokenizer_config() -> dict:
     return config.get("tokenizer", {})
 
 
-def load_embedding_model() -> SentenceTransformer:
+def resolve_model_path() -> str:
     """
-    Embedding modelini config dosyasındaki base_model_name değerine göre yükler.
+    Fine-tuned model klasörü varsa onu döndürür.
+    Yoksa base model adını döndürür.
 
-    Fine-tuning sonrası istersek burada fine_tuned_model_path kullanılabilir.
+    Böylece sistem önce kendi eğitilmiş modelimizi kullanır.
+    Eğer model henüz eğitilmemişse otomatik olarak Hugging Face base modeline döner.
     """
     model_config = get_model_config()
-    model_name = model_config["base_model_name"]
+
+    base_model_name = model_config["base_model_name"]
+    fine_tuned_model_path = model_config.get("fine_tuned_model_path")
+
+    if fine_tuned_model_path:
+        full_path: Path = get_project_root() / fine_tuned_model_path
+
+        if full_path.exists() and full_path.is_dir():
+            return str(full_path)
+
+    return base_model_name
+
+
+def load_embedding_model() -> SentenceTransformer:
+    """
+    Embedding modelini yükler.
+
+    Öncelik:
+    1. models/ecommerce-semantic-model gibi fine-tuned model klasörü
+    2. config/model.yaml içindeki base_model_name
+    """
+    model_path = resolve_model_path()
+    model_config = get_model_config()
     device = model_config.get("device", "auto")
 
     if device == "auto":
-        model = SentenceTransformer(model_name)
+        model = SentenceTransformer(model_path)
     else:
-        model = SentenceTransformer(model_name, device=device)
+        model = SentenceTransformer(model_path, device=device)
 
     return model
 
@@ -79,13 +104,15 @@ def test_model() -> None:
     """
     model_config = get_model_config()
     expected_dim = model_config["embedding_dimension"]
+    model_path = resolve_model_path()
 
     model = load_embedding_model()
 
     sample_text = "1000 TL altı stokta olan kablosuz kulaklık öner"
     embedding = encode_text(model, sample_text)
 
-    print(f"Model başarıyla yüklendi: {model_config['base_model_name']}")
+    print(f"Yüklenen model: {model_path}")
+    print(f"Base model: {model_config['base_model_name']}")
     print(f"Örnek metin: {sample_text}")
     print(f"Embedding boyutu: {embedding.shape[0]}")
 
