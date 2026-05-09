@@ -127,6 +127,10 @@ def build_filter_conditions(parsed_query: ParsedQuery) -> tuple[list[str], dict[
         conditions.append("metadata->>'durum' = %(status)s")
         params["status"] = parsed_query.status
 
+    if parsed_query.model_filter is not None:
+        conditions.append("LOWER(baslik) LIKE LOWER(%(model_filter)s)")
+        params["model_filter"] = f"%{parsed_query.model_filter}%"
+
     for key, value in parsed_query.attribute_filters.items():
         metadata_key = ATTRIBUTE_KEY_MAP.get(key)
         if metadata_key is None:
@@ -254,21 +258,35 @@ def run_demo() -> None:
     Terminalden hızlı filtreli semantic search testi yapar.
     """
     test_queries = [
-        "iphone 64 gb",
-        "iphone 128 gb",
-        "bluetooth kulaklık",
-        "kablolu oyuncu mouse",
-        "27 inç 165hz monitör",
-        "20000 mah powerbank",
-        "16 gb ram laptop",
+        "s beden siyah tişört",
+        "m beden gri tişört",
+        "l beden lacivert tişört",
+        "xl beden beyaz tişört",
+        "kırmızı tişört",
+        "yeşil tişört",
+        "bordo sweatshirt",
+        "bej sweatshirt",
+        "haki sweatshirt",
+        "lacivert gömlek",
+        "gri pantolon",
+        "32 beden mavi pantolon",
+        "haki mont",
+        "siyah xl mont",
+        "42 numara ayakkabı",
+        "iphone 15 mavi",
+        "samsung s23 gri",
+        "redmi note 13 pro",
+        "poco x6 pro 512 gb",
+        "macbook air m2 8 gb",
+        "hp victus 16 oyuncu laptop",
+        "poco 512 gb",
+        "32 gb ram oyuncu laptop",
+        "32/32 mavi pantolon",
+        "pembe kulaklık",
         "1000 TL altı stokta olan kablosuz kulaklık öner",
-        "hasarlı gelen ürün iadelerini göster",
         "teslim edilen kargoları listele",
-        "oyuncu mouse öner",
+        "hasarlı gelen ürün iadelerini göster",
         "yüksek puanlı ayakkabı yorumları",
-        "Samsung marka telefonları göster",
-        "stokta olmayan ürünleri listele",
-        "en az 4 puan alan ayakkabı yorumları",
     ]
 
     for query in test_queries:

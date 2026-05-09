@@ -17,6 +17,7 @@ class ParsedQuery:
     category: str | None = None
     brand: str | None = None
     status: str | None = None
+    model_filter: str | None = None
     attribute_filters: dict[str, str | int | float | bool] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -101,15 +102,48 @@ INTENT_KEYWORDS = {
         "tablet",
         "telefon",
         "iphone",
+        "samsung",
         "galaxy",
+        "xiaomi",
+        "redmi",
+        "poco",
+        "oppo",
+        "vivo",
+        "realme",
+        "honor",
+        "macbook",
+        "notebook",
+        "ultrabook",
+        "thinkpad",
+        "ideapad",
+        "vivobook",
+        "zenbook",
+        "victus",
+        "nitro",
+        "monster",
+        "msi",
         "monitör",
         "monitor",
         "powerbank",
         "sweatshirt",
+        "sweat",
+        "gömlek",
+        "gomlek",
+        "pantolon",
+        "jean",
+        "chino",
+        "mont",
+        "parka",
+        "bot",
+        "sneaker",
+        "airpods",
+        "buds",
         "ayakkabı",
         "ayakkabi",
         "tişört",
         "tisort",
+        "tshirt",
+        "t-shirt",
     ],
 }
 
@@ -128,7 +162,7 @@ CATEGORY_KEYWORDS = {
     "Koşu Ayakkabısı": ["koşu ayakkabısı", "kosu ayakkabisi"],
     "Spor Ayakkabı": ["spor ayakkabı", "spor ayakkabi"],
     "Günlük Ayakkabı": ["günlük ayakkabı", "gunluk ayakkabi", "sneaker"],
-    "Bot": ["bot", "outdoor bot"],
+    "Bot": ["outdoor bot", "bot"],
 
     # Genel kategoriler
     "Kulaklık": [
@@ -136,11 +170,42 @@ CATEGORY_KEYWORDS = {
         "kulaklik",
         "bluetooth kulaklık",
         "kablosuz kulaklık",
+        "airpods",
+        "buds",
     ],
     "Mouse": ["mouse", "fare", "kablosuz mouse"],
     "Klavye": ["klavye", "keyboard", "kablosuz klavye"],
-    "Laptop": ["laptop", "dizüstü", "dizustu", "notebook"],
-    "Telefon": ["telefon", "akıllı telefon", "akilli telefon", "iphone", "galaxy"],
+    "Laptop": [
+        "laptop",
+        "dizüstü",
+        "dizustu",
+        "notebook",
+        "ultrabook",
+        "macbook",
+        "thinkpad",
+        "ideapad",
+        "vivobook",
+        "zenbook",
+        "victus",
+        "nitro",
+        "monster",
+        "msi",
+    ],
+    "Telefon": [
+        "telefon",
+        "akıllı telefon",
+        "akilli telefon",
+        "iphone",
+        "samsung",
+        "galaxy",
+        "xiaomi",
+        "redmi",
+        "poco",
+        "oppo",
+        "vivo",
+        "realme",
+        "honor",
+    ],
     "Tablet": ["tablet"],
     "Monitör": ["monitör", "monitor"],
     "Şarj Cihazı": [
@@ -155,20 +220,30 @@ CATEGORY_KEYWORDS = {
     "Akıllı Saat": ["akıllı saat", "akilli saat", "watch"],
     "Kahve Makinesi": ["kahve makinesi", "türk kahvesi", "turk kahvesi"],
     "Süpürge": ["süpürge", "supurge"],
-    "Tişört": ["tişört", "tisort", "t-shirt"],
-    "Pantolon": ["pantolon", "jean"],
-    "Sweatshirt": ["sweatshirt", "kapüşonlu", "kapusonlu"],
-    "Mont": ["mont", "kışlık mont", "kislik mont"],
-    "Ayakkabı": ["ayakkabı", "ayakkabi", "ayakkabılar", "ayakkabilar"],
+    "Tişört": ["tişört", "tisort", "tshirt", "t-shirt"],
+    "Gömlek": ["gömlek", "gomlek"],
+    "Pantolon": ["pantolon", "jean", "chino"],
+    "Sweatshirt": ["sweatshirt", "sweat", "kapüşonlu", "kapusonlu"],
+    "Mont": ["şişme mont", "sisme mont", "kışlık mont", "kislik mont", "parka", "mont"],
+    "Ayakkabı": ["ayakkabı", "ayakkabi", "ayakkabılar", "ayakkabilar", "sneaker"],
 }
 
 
 BRAND_ALIASES = {
+    "new balance": "new balance",
+    "lc waikiki": "lc waikiki",
     "iphone": "apple",
+    "macbook": "apple",
     "apple": "apple",
     "samsung": "samsung",
     "galaxy": "samsung",
+    "redmi": "xiaomi",
     "xiaomi": "xiaomi",
+    "poco": "poco",
+    "oppo": "oppo",
+    "vivo": "vivo",
+    "realme": "realme",
+    "honor": "honor",
     "sony": "sony",
     "jbl": "jbl",
     "razer": "razer",
@@ -176,11 +251,20 @@ BRAND_ALIASES = {
     "philips": "philips",
     "arzum": "arzum",
     "monster": "monster",
+    "thinkpad": "lenovo",
+    "ideapad": "lenovo",
     "lenovo": "lenovo",
+    "vivobook": "asus",
+    "zenbook": "asus",
+    "tuf": "asus",
     "asus": "asus",
-    "msi": "msi",
+    "victus": "hp",
     "hp": "hp",
+    "xps": "dell",
     "dell": "dell",
+    "nitro": "acer",
+    "acer": "acer",
+    "msi": "msi",
     "anker": "anker",
     "huawei": "huawei",
     "kingston": "kingston",
@@ -189,7 +273,12 @@ BRAND_ALIASES = {
     "nike": "nike",
     "adidas": "adidas",
     "puma": "puma",
-    "lc waikiki": "lc waikiki",
+    "levi's": "levi's",
+    "levis": "levi's",
+    "skechers": "skechers",
+    "converse": "converse",
+    "columbia": "columbia",
+    "koton": "koton",
     "mavi": "mavi",
     "defacto": "defacto",
 }
@@ -198,17 +287,111 @@ BRAND_ALIASES = {
 COLOR_VALUES = {
     "siyah": "Siyah",
     "beyaz": "Beyaz",
-    "mavi": "Mavi",
-    "pembe": "Pembe",
     "gri": "Gri",
+    "mavi": "Mavi",
+    "lacivert": "Lacivert",
     "kırmızı": "Kırmızı",
     "kirmizi": "Kırmızı",
     "yeşil": "Yeşil",
     "yesil": "Yeşil",
+    "bordo": "Bordo",
+    "haki": "Haki",
+    "bej": "Bej",
+    "mor": "Mor",
+    "pembe": "Pembe",
+    "altın": "Altın",
+    "altin": "Altın",
+    "sarı": "Sarı",
+    "sari": "Sarı",
     "kahverengi": "Kahverengi",
     "gümüş": "Gümüş",
     "gumus": "Gümüş",
 }
+
+
+PHONE_CONTEXT_KEYWORDS = [
+    "iphone",
+    "samsung",
+    "galaxy",
+    "xiaomi",
+    "redmi",
+    "poco",
+    "oppo",
+    "vivo",
+    "realme",
+    "honor",
+    "telefon",
+]
+
+
+LAPTOP_CONTEXT_KEYWORDS = [
+    "laptop",
+    "notebook",
+    "ultrabook",
+    "macbook",
+    "thinkpad",
+    "ideapad",
+    "vivobook",
+    "zenbook",
+    "victus",
+    "nitro",
+    "monster",
+    "msi",
+]
+
+
+MODEL_PATTERNS = [
+    # Telefon modelleri
+    (r"\biphone\s+se\s+2022\b", "iPhone SE 2022"),
+    (r"\biphone\s+se\b", "iPhone SE"),
+    (r"\biphone\s+(11|12|13|14|15)\b", "iPhone {g1}"),
+    (r"\b(?:samsung\s+|galaxy\s+)?s21\s*fe\b", "Galaxy S21 FE"),
+    (r"\b(?:samsung\s+|galaxy\s+)a15\b", "Galaxy A15"),
+    (r"\b(?:samsung\s+|galaxy\s+)a35\b", "Galaxy A35"),
+    (r"\b(?:samsung\s+|galaxy\s+)a55\b", "Galaxy A55"),
+    (r"\b(?:samsung\s+|galaxy\s+)s23\b", "Galaxy S23"),
+    (r"\b(?:samsung\s+|galaxy\s+)s24\b", "Galaxy S24"),
+    (r"\bredmi\s+note\s+13\s+pro\b", "Redmi Note 13 Pro"),
+    (r"\bredmi\s+note\s+12\b", "Redmi Note 12"),
+    (r"\bredmi\s+note\s+13\b", "Redmi Note 13"),
+    (r"\bxiaomi\s+13t\b", "Xiaomi 13T"),
+    (r"\bpoco\s+x5\s+pro\b", "Poco X5 Pro"),
+    (r"\bpoco\s+x6\s+pro\b", "Poco X6 Pro"),
+    (r"\boppo\s+reno\s+10\b", "Oppo Reno 10"),
+    (r"\boppo\s+a78\b", "Oppo A78"),
+    (r"\bvivo\s+v29\b", "Vivo V29"),
+    (r"\bvivo\s+y36\b", "Vivo Y36"),
+    (r"\brealme\s+11\s+pro\b", "Realme 11 Pro"),
+    (r"\brealme\s+c55\b", "Realme C55"),
+    (r"\bhonor\s+90\b", "Honor 90"),
+    (r"\bhonor\s+x9a\b", "Honor X9a"),
+
+    # Laptop modelleri
+    (r"\bmacbook\s+pro\s+14\s+m3\b", "MacBook Pro 14 M3"),
+    (r"\bmacbook\s+air\s+m1\b", "MacBook Air M1"),
+    (r"\bmacbook\s+air\s+m2\b", "MacBook Air M2"),
+    (r"\bideapad\s+15\b", "IdeaPad 15"),
+    (r"\bthinkpad\s+e14\b", "ThinkPad E14"),
+    (r"\blegion\s+5\b", "Legion 5"),
+    (r"\btuf\s+gaming\s+a15\b", "TUF Gaming A15"),
+    (r"\bvivobook\s+15\b", "Vivobook 15"),
+    (r"\bzenbook\s+14\b", "Zenbook 14"),
+    (r"\bpavilion\s+15\b", "Pavilion 15"),
+    (r"\bvictus\s+16\b", "Victus 16"),
+    (r"\benvy\s+x360\b", "Envy x360"),
+    (r"\binspiron\s+15\b", "Inspiron 15"),
+    (r"\bxps\s+13\b", "XPS 13"),
+    (r"\bdell\s+g15\b", "G15"),
+    (r"\baspire\s+5\b", "Aspire 5"),
+    (r"\bnitro\s+5\b", "Nitro 5"),
+    (r"\bswift\s+3\b", "Swift 3"),
+    (r"\bthin\s+gf63\b", "Thin GF63"),
+    (r"\bkatana\s+15\b", "Katana 15"),
+    (r"\bmatebook\s+d15\b", "MateBook D15"),
+    (r"\bmatebook\s+14\b", "MateBook 14"),
+    (r"\babra\s+a5\b", "Abra A5"),
+    (r"\btulpar\s+t7\b", "Tulpar T7"),
+]
 
 
 ATTRIBUTE_PATTERNS = [
@@ -222,16 +405,11 @@ ATTRIBUTE_PATTERNS = [
     },
     {
         "key": "depolama",
-        "regex_patterns": [r"\b(\d+)\s*gb\b"],
-        "value_format": "{n}GB",
-        "context_keywords": [
-            "iphone",
-            "telefon",
-            "galaxy",
-            "tablet",
-            "akıllı telefon",
-            "akilli telefon",
+        "regex_patterns": [
+            r"\b(\d+)\s*gb\s*ssd\b",
         ],
+        "value_format": "{n}GB SSD",
+        "context_keywords": LAPTOP_CONTEXT_KEYWORDS,
         "exclude_near_keywords": ["ram"],
     },
     {
@@ -387,6 +565,29 @@ def extract_beden_filter(text: str) -> str | None:
     return None
 
 
+def extract_pantolon_beden_filter(text: str) -> str | None:
+    if "pantolon" not in text and "jean" not in text and "chino" not in text:
+        return None
+
+    slash_match = re.search(r"\b(30|32|34|36)/(30|32|34|36)\b", text)
+    if slash_match:
+        return slash_match.group(0)
+
+    explicit_match = re.search(r"\b(30|32|34|36)\s*beden\s+(?:mavi\s+|siyah\s+|gri\s+|bej\s+|lacivert\s+)?(?:pantolon|jean|chino)\b", text)
+    if explicit_match:
+        return explicit_match.group(1)
+
+    reverse_match = re.search(r"\b(?:pantolon|jean|chino)\s+(?:beden\s*)?(30|32|34|36)\b", text)
+    if reverse_match:
+        return reverse_match.group(1)
+
+    bare_match = re.search(r"\b(30|32|34|36)\b", text)
+    if bare_match:
+        return bare_match.group(1)
+
+    return None
+
+
 def extract_numara_filter(text: str) -> str | None:
     patterns = [
         r"\b(\d{2})\s*numara\b",
@@ -404,6 +605,102 @@ def extract_numara_filter(text: str) -> str | None:
             return match.group(1)
 
     return None
+
+
+def detect_model_filter(text: str) -> str | None:
+    for pattern, model_name in MODEL_PATTERNS:
+        match = re.search(pattern, text)
+        if not match:
+            continue
+
+        if "{g1}" in model_name:
+            return model_name.format(g1=match.group(1))
+
+        return model_name
+
+    return None
+
+
+def infer_category_from_model_filter(model_filter: str | None) -> str | None:
+    if model_filter is None:
+        return None
+
+    phone_prefixes = (
+        "iPhone",
+        "Galaxy",
+        "Redmi",
+        "Xiaomi",
+        "Poco",
+        "Oppo",
+        "Vivo",
+        "Realme",
+        "Honor",
+    )
+    laptop_prefixes = (
+        "MacBook",
+        "IdeaPad",
+        "ThinkPad",
+        "Legion",
+        "TUF",
+        "Vivobook",
+        "Zenbook",
+        "Pavilion",
+        "Victus",
+        "Envy",
+        "Inspiron",
+        "XPS",
+        "G15",
+        "Aspire",
+        "Nitro",
+        "Swift",
+        "Thin",
+        "Katana",
+        "MateBook",
+        "Abra",
+        "Tulpar",
+    )
+
+    if model_filter.startswith(phone_prefixes):
+        return "Telefon"
+
+    if model_filter.startswith(laptop_prefixes):
+        return "Laptop"
+
+    return None
+
+
+def extract_contextual_gb_filters(text: str) -> dict[str, str]:
+    filters: dict[str, str] = {}
+    phone_context = has_any_keyword(text, PHONE_CONTEXT_KEYWORDS)
+    laptop_context = has_any_keyword(text, LAPTOP_CONTEXT_KEYWORDS)
+
+    ram_match = re.search(r"\b(\d+)\s*gb\s*ram\b|\bram\s*(\d+)\s*gb\b", text)
+    if ram_match:
+        ram_value = ram_match.group(1) or ram_match.group(2)
+        filters["ram"] = f"{ram_value}GB"
+
+    gb_ssd_match = re.search(r"\b(\d+)\s*gb\s*ssd\b", text)
+    if gb_ssd_match and laptop_context:
+        filters["depolama"] = f"{gb_ssd_match.group(1)}GB SSD"
+
+    tb_ssd_match = re.search(r"\b(\d+)\s*tb\s*ssd\b", text)
+    if tb_ssd_match and laptop_context:
+        filters["depolama"] = f"{tb_ssd_match.group(1)}TB SSD"
+
+    bare_gb_match = re.search(r"\b(\d+)\s*gb\b", text)
+    if not bare_gb_match:
+        return filters
+
+    bare_gb_value = bare_gb_match.group(1)
+    if phone_context and not ram_match:
+        filters["depolama"] = f"{bare_gb_value}GB"
+    elif laptop_context and "depolama" not in filters and not ram_match:
+        if bare_gb_value in {"4", "8", "16", "32"}:
+            filters["ram"] = f"{bare_gb_value}GB"
+        else:
+            filters["depolama"] = f"{bare_gb_value}GB SSD"
+
+    return filters
 
 
 def extract_attribute_filters(query: str) -> dict[str, str | int | float | bool]:
@@ -453,9 +750,15 @@ def extract_attribute_filters(query: str) -> dict[str, str | int | float | bool]
     if beden is not None:
         filters["beden"] = beden
 
+    pantolon_beden = extract_pantolon_beden_filter(text)
+    if pantolon_beden is not None:
+        filters["beden"] = pantolon_beden
+
     numara = extract_numara_filter(text)
     if numara is not None:
         filters["numara"] = numara
+
+    filters.update(extract_contextual_gb_filters(text))
 
     return filters
 
@@ -565,7 +868,7 @@ def detect_intent(text: str) -> str | None:
 
 def detect_category(text: str) -> str | None:
     for category, keywords in CATEGORY_KEYWORDS.items():
-        if any(keyword in text for keyword in keywords):
+        if any(re.search(rf"\b{re.escape(keyword)}\b", text) for keyword in keywords):
             return category
 
     return None
@@ -573,6 +876,10 @@ def detect_category(text: str) -> str | None:
 
 def detect_brand(text: str) -> str | None:
     for keyword, brand in BRAND_ALIASES.items():
+        if keyword == "mavi" and has_any_keyword(text, CLOTHING_CONTEXT_KEYWORDS):
+            if not re.search(r"\bmavi\s+(marcus|oversize|marka)\b", text):
+                continue
+
         if re.search(rf"\b{re.escape(keyword)}\b", text):
             return brand
 
@@ -618,9 +925,6 @@ def clean_search_text(text: str) -> str:
 def parse_query(query: str) -> ParsedQuery:
     normalized = normalize_text(query)
 
-    intent = detect_intent(normalized)
-    source_tables = INTENT_TABLES.get(intent, [])
-
     max_price = extract_max_price(normalized)
     min_price = extract_min_price(normalized)
     in_stock_only, out_of_stock_only = extract_stock_filter(normalized)
@@ -628,8 +932,17 @@ def parse_query(query: str) -> ParsedQuery:
     category = detect_category(normalized)
     brand = detect_brand(normalized)
     status = detect_status(normalized)
+    model_filter = detect_model_filter(normalized)
+    if category is None:
+        category = infer_category_from_model_filter(model_filter)
+
     attribute_filters = extract_attribute_filters(normalized)
     search_text = clean_search_text(normalized)
+    intent = detect_intent(normalized)
+    if intent is None and (category or brand or model_filter or attribute_filters):
+        intent = "product"
+
+    source_tables = INTENT_TABLES.get(intent, [])
 
     return ParsedQuery(
         original_query=query,
@@ -644,6 +957,7 @@ def parse_query(query: str) -> ParsedQuery:
         category=category,
         brand=brand,
         status=status,
+        model_filter=model_filter,
         attribute_filters=attribute_filters,
     )
 
@@ -666,6 +980,29 @@ def run_demo() -> None:
         "xl sweatshirt",
         "42 numara ayakkabı",
         "41 ayakkabı",
+        "l beden lacivert tişört",
+        "bordo sweatshirt",
+        "haki mont",
+        "lacivert gömlek",
+        "poco 512 gb",
+        "iphone 15 mavi",
+        "iphone 13 256 gb mavi",
+        "samsung s23 gri",
+        "samsung s24 siyah",
+        "redmi note 13 pro",
+        "poco x6 pro 512 gb",
+        "macbook 8 gb",
+        "macbook air m2 8 gb",
+        "macbook pro 14 m3 16 gb",
+        "lenovo legion 5 32 gb ram",
+        "hp victus 16 oyuncu laptop",
+        "dell xps 13 ultrabook",
+        "acer nitro 5 oyuncu laptop",
+        "512 gb ssd laptop",
+        "16 gb ram laptop",
+        "32 beden mavi pantolon",
+        "32/32 mavi pantolon",
+        "34/32 mavi pantolon",
         "hasarlı gelen ürün iadelerini göster",
         "teslim edilen kargoları listele",
         "oyuncu mouse öner",
