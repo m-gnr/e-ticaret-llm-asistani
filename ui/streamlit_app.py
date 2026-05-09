@@ -75,16 +75,16 @@ def inject_css() -> None:
             }
 
             div[data-testid="stHorizontalBlock"]:has(.xp-left-title) > div[data-testid="stColumn"]:first-child {
-                flex: 0 0 312px !important;
-                flex-basis: 312px !important;
+                flex: 0 0 328px !important;
+                flex-basis: 328px !important;
                 flex-grow: 0 !important;
                 flex-shrink: 0 !important;
-                width: 312px !important;
-                min-width: 310px !important;
-                max-width: 330px !important;
+                width: 328px !important;
+                min-width: 320px !important;
+                max-width: 350px !important;
                 background: #7ca7e8;
                 border-right: 2px solid #9eaac0;
-                padding: 0 14px 18px 14px;
+                padding: 0 14px 20px 14px;
                 min-height: 650px;
             }
 
@@ -193,54 +193,23 @@ def inject_css() -> None:
             .xp-left-title {
                 font-weight: bold;
                 color: #1f3763;
-                background: #d7e4ff;
+                font-size: 15px;
+                background: #dbe8ff;
                 border-bottom: 1px solid #9db5e9;
-                padding: 9px 10px;
-                margin: 0 -14px 18px -14px;
-                box-shadow: inset 1px 1px white;
-            }
-
-            .speech-bubble {
-                background: #f7f7f7;
-                color: #222;
-                border-radius: 12px;
-                border: 1px solid #c7c7c7;
-                padding: 18px;
-                box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.15);
+                padding: 12px 14px;
+                margin: 0 -14px 36px -14px;
+                line-height: 1.2;
                 position: relative;
-                margin-bottom: 18px;
-            }
-
-            .speech-bubble:after {
-                content: "";
-                position: absolute;
-                bottom: -26px;
-                left: 42px;
-                border-width: 26px 12px 0 0;
-                border-style: solid;
-                border-color: #f7f7f7 transparent transparent transparent;
-            }
-
-            .bubble-title {
-                font-weight: bold;
-                font-size: 16px;
-                margin-bottom: 10px;
-            }
-
-            .bubble-text {
-                font-size: 14px;
-                margin-bottom: 4px;
-                color: #333;
-                line-height: 1.45;
+                top: 18px;
             }
 
             .example-box {
                 background: #eaf2ff;
                 border: 1px solid #9db5e9;
-                padding: 9px 10px;
-                margin-top: 12px;
+                padding: 14px;
+                margin-top: 22px;
                 font-size: 13px;
-                line-height: 1.6;
+                line-height: 1.7;
                 color: #1a2f55;
                 box-shadow: inset 1px 1px white;
             }
@@ -249,6 +218,51 @@ def inject_css() -> None:
                 font-weight: bold;
                 margin-bottom: 8px;
                 color: #1f3763;
+            }
+
+            .xp-form-heading {
+                color: #1f3763;
+                font-size: 16px;
+                font-weight: bold;
+                margin-bottom: 8px;
+            }
+
+            .xp-form-description {
+                color: #333;
+                font-size: 13px;
+                line-height: 1.5;
+                margin-bottom: 16px;
+            }
+
+            .xp-form-section-label {
+                color: #1f3763;
+                font-size: 13px;
+                font-weight: bold;
+                margin: 14px 0 7px 0;
+            }
+
+            div[data-testid="stVerticalBlock"]:has(.xp-form-card-marker):not(:has(.xp-left-title)) {
+                background: #f7f7f7;
+                border: 1px solid #9db5e9;
+                border-radius: 0;
+                box-shadow: inset 1px 1px white, 2px 2px 0 rgba(0, 0, 0, 0.12);
+                padding: 18px;
+                margin-top: 14px;
+                margin-bottom: 0;
+                gap: 0.55rem;
+            }
+
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.xp-form-card-marker) {
+                background: #f7f7f7;
+                border: 1px solid #9db5e9;
+                border-radius: 0;
+                box-shadow: inset 1px 1px white, 2px 2px 0 rgba(0, 0, 0, 0.12);
+                margin-top: 14px;
+                margin-bottom: 0;
+            }
+
+            div[data-testid="stVerticalBlockBorderWrapper"]:has(.xp-form-card-marker) > div {
+                padding: 18px;
             }
 
             .result-header {
@@ -376,6 +390,11 @@ def inject_css() -> None:
                 min-height: 22px;
             }
 
+            div[data-testid="stCheckbox"] {
+                margin-top: 3px;
+                margin-bottom: 12px;
+            }
+
             div[data-testid="stCheckbox"] label span {
                 font-size: 13px;
             }
@@ -389,7 +408,7 @@ def inject_css() -> None:
                 background: transparent;
                 border: 0;
                 padding: 0;
-                margin-top: 4px;
+                margin-top: 24px;
             }
 
             .stExpander {
@@ -435,6 +454,7 @@ def get_rover_image(state: str) -> Path:
 def init_session_state() -> None:
     defaults = {
         "query": "",
+        "query_input": "",
         "results": [],
         "parsed_query": None,
         "answer": "",
@@ -444,6 +464,15 @@ def init_session_state() -> None:
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+
+
+def clear_search_state() -> None:
+    st.session_state.query = ""
+    st.session_state.query_input = ""
+    st.session_state.results = []
+    st.session_state.parsed_query = None
+    st.session_state.answer = ""
+    st.session_state.rover_state = "idle"
 
 
 def render_xp_header() -> None:
@@ -480,34 +509,41 @@ def render_xp_header() -> None:
 
 def render_left_panel() -> tuple[str, int, bool, bool]:
     rover_state = st.session_state.rover_state
-    parsed_query = st.session_state.parsed_query
-    intent = parsed_query.intent if parsed_query else None
-
-    rover_message = get_rover_message(rover_state, intent)
     rover_image = get_rover_image(rover_state)
 
     st.markdown('<div class="xp-left-title">Search Companion</div>', unsafe_allow_html=True)
 
-    st.markdown(
-        f"""
-        <div class="speech-bubble">
-            <div class="bubble-title">Ne aramamı istersin?</div>
-            <div class="bubble-text">{rover_message}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with st.container(border=True):
+        st.markdown('<span class="xp-form-card-marker"></span>', unsafe_allow_html=True)
+        st.markdown('<div class="xp-form-heading">Doğal dil ile ara</div>', unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div class="xp-form-description">
+                E-ticaret veritabanında ürün, kargo, iade, yorum ve sipariş kayıtlarını arayabilirsin.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    query = st.text_input(
-        "Sorgu",
-        value=st.session_state.query,
-        placeholder="Örn: stokta kulaklık öner",
-        label_visibility="collapsed",
-    )
+        st.markdown('<div class="xp-form-section-label">Ne aramak istiyorsun?</div>', unsafe_allow_html=True)
+        query = st.text_input(
+            "Ne aramak istiyorsun?",
+            placeholder="Orn: stokta kulaklik oner",
+            label_visibility="collapsed",
+            key="query_input",
+        )
 
-    result_limit = st.selectbox("Sonuç sayısı", options=[3, 5, 10], index=1)
-    show_debug = st.checkbox("Teknik detayları göster", value=True)
-    search_clicked = st.button("Ara", use_container_width=True)
+        st.markdown('<div class="xp-form-section-label">Sonuç sayısı</div>', unsafe_allow_html=True)
+        result_limit = st.selectbox("Sonuç sayısı", options=[3, 5, 10], index=1, label_visibility="collapsed")
+
+        st.markdown('<div class="xp-form-section-label">Seçenekler</div>', unsafe_allow_html=True)
+        show_debug = st.checkbox("Teknik detayları göster", value=True)
+
+        clear_col, search_col = st.columns([1, 1], gap="small")
+        with clear_col:
+            st.button("Temizle", use_container_width=True, on_click=clear_search_state)
+        with search_col:
+            search_clicked = st.button("Ara", use_container_width=True)
 
     st.markdown(
         """
