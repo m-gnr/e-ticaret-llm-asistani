@@ -160,6 +160,8 @@ SELECT
         'Ürün yorumu.',
         'Ürün:', u.ad || '.',
         'Marka:', COALESCE(m.ad, 'Belirtilmemiş') || '.',
+        'Kategori:', COALESCE(string_agg(DISTINCT k.ad, ', '), 'Belirtilmemiş') || '.',
+        'Üst kategori:', COALESCE(string_agg(DISTINCT ust.ad, ', '), 'Belirtilmemiş') || '.',
         'Müşteri:', mus.ad, mus.soyad || '.',
         'Puan:', y.puan::text || '.',
         'Başlık:', COALESCE(y.baslik, '') || '.',
@@ -174,7 +176,17 @@ SELECT
         'musteri_id', mus.musteri_id,
         'puan', y.puan,
         'baslik', y.baslik,
-        'olusturma_tarihi', y.olusturma_tarihi
+        'olusturma_tarihi', y.olusturma_tarihi,
+        'kategoriler',
+            COALESCE(
+                jsonb_agg(DISTINCT k.ad) FILTER (WHERE k.ad IS NOT NULL),
+                '[]'::jsonb
+            ),
+        'ust_kategoriler',
+            COALESCE(
+                jsonb_agg(DISTINCT ust.ad) FILTER (WHERE ust.ad IS NOT NULL),
+                '[]'::jsonb
+            )
     ) AS metadata
 
 FROM public.urun_yorumlari y
@@ -183,7 +195,27 @@ JOIN public.urunler u
 LEFT JOIN public.markalar m
     ON m.marka_id = u.marka_id
 JOIN public.musteriler mus
-    ON mus.musteri_id = y.musteri_id;
+    ON mus.musteri_id = y.musteri_id
+LEFT JOIN public.urun_kategorileri uk
+    ON uk.urun_id = u.urun_id
+LEFT JOIN public.kategoriler k
+    ON k.kategori_id = uk.kategori_id
+LEFT JOIN public.kategoriler ust
+    ON ust.kategori_id = k.ust_kategori_id
+GROUP BY
+    y.yorum_id,
+    y.urun_id,
+    y.musteri_id,
+    y.puan,
+    y.baslik,
+    y.icerik,
+    y.olusturma_tarihi,
+    u.urun_id,
+    u.ad,
+    m.ad,
+    mus.musteri_id,
+    mus.ad,
+    mus.soyad;
 
 
 -- =========================================================
