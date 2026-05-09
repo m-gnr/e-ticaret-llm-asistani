@@ -1,8 +1,8 @@
 # e-ticaret-LLM-asistani
 
-PostgreSQL tabanlı bir e-ticaret veritabanı üzerinde doğal dil ile semantik arama yapmayı sağlayan okul projesi/prototip seviyesinde bir LLM asistanı çalışmasıdır.
+PostgreSQL tabanlı bir e-ticaret veritabanı üzerinde Türkçe doğal dil sorguları ile semantik arama yapılmasını sağlayan okul projesi/prototip seviyesinde bir LLM asistanı çalışmasıdır.
 
-Bu proje, gerçek bir üretim sistemi değildir. Amaç; veritabanı tasarımı, pgvector ile semantik arama, SentenceTransformer tabanlı embedding üretimi, basit sorgu analizi, fine-tuning ve CLI üzerinden demo akışını akademik bir proje kapsamında göstermektir.
+Bu proje gerçek bir üretim sistemi değildir. Amaç; veritabanı tasarımı, pgvector ile semantik arama, SentenceTransformer tabanlı embedding üretimi, kural tabanlı sorgu analizi, fine-tuning ve CLI/Streamlit üzerinden demo akışını akademik bir proje kapsamında göstermektir.
 
 ## 1. Proje Başlığı
 
@@ -12,19 +12,21 @@ PostgreSQL, pgvector ve SentenceTransformer kullanılarak geliştirilen Türkçe
 
 ## 2. Proje Amacı
 
-Projenin temel amacı, kullanıcının Türkçe doğal dil ile yazdığı e-ticaret sorgularını analiz ederek PostgreSQL veritabanı üzerindeki ilgili kayıtları bulmak ve okunabilir bir cevap üretmektir.
+Projenin temel amacı, kullanıcının Türkçe doğal dil ile yazdığı e-ticaret sorgularını analiz ederek PostgreSQL veritabanındaki ilgili kayıtları bulmak ve okunabilir bir cevap üretmektir.
 
-Örnek olarak kullanıcı:
+Örnek sorgular:
 
 ```text
 1000 TL altı stokta olan kablosuz kulaklık öner
+iphone 15 mavi
+32 beden mavi pantolon
+kötü yorumlar
+10000 40000 TL arası en pahalı iphone
 ```
 
-şeklinde bir sorgu girdiğinde sistem sorgudan intent ve filtre bilgilerini çıkarmayı, sorgu embedding'i üretmeyi, `semantic_index` tablosunda en yakın kayıtları bulmayı ve sonuçları terminalde anlaşılır bir cevap olarak göstermeyi hedefler.
+Sistem bu sorgulardan intent, kategori, marka, model, fiyat aralığı, stok durumu, ürün özellikleri, puan filtresi ve sıralama niyeti gibi bilgileri çıkarmaya çalışır. Ardından sorgu embedding'i üretilir, `semantic_index` tablosunda pgvector ile benzer kayıtlar aranır ve sonuçlar kullanıcıya sade bir cevap olarak gösterilir.
 
 ## 3. Genel Mimari
-
-Proje aşağıdaki ana bileşenlerden oluşur:
 
 ```text
 Kullanıcı Sorgusu
@@ -33,25 +35,25 @@ Kullanıcı Sorgusu
 Query Parser
        |
        v
-SentenceTransformer Modeli
+Filtreler ve Arama Metni
        |
        v
-Embedding Üretimi
+SentenceTransformer Embedding
        |
        v
-PostgreSQL + pgvector Semantic Search
+PostgreSQL + pgvector
        |
        v
-Metadata Filtreleri
+Metadata Filtreleri ve Sıralama
        |
        v
 Answer Generator
        |
        v
-CLI Demo Cevabı
+CLI veya Streamlit Demo
 ```
 
-Akışta hem kural tabanlı filtre çıkarma hem de embedding tabanlı semantik benzerlik araması birlikte kullanılır.
+Mimari, semantik benzerlik aramasını metadata filtreleriyle birlikte kullanır. Böylece örneğin `iphone 15 mavi` sorgusunda hem embedding benzerliği hem de kategori, marka, model ve renk filtreleri birlikte değerlendirilir.
 
 ## 4. Kullanılan Teknolojiler
 
@@ -65,10 +67,11 @@ Akışta hem kural tabanlı filtre çıkarma hem de embedding tabanlı semantik 
 - YAML config dosyaları
 - JSONL training dataset
 - CLI tabanlı demo app
+- Streamlit tabanlı görsel demo app
 
 ## 5. Veritabanı Yapısı
 
-Proje, e-ticaret alanına uygun şekilde tasarlanmış ilişkisel bir PostgreSQL veritabanı üzerinde çalışır.
+Proje, e-ticaret alanına uygun ilişkisel bir PostgreSQL veritabanı üzerinde çalışır.
 
 Ana tablolar:
 
@@ -93,7 +96,7 @@ Ana tablolar:
 - `iade_ogeleri`
 - `urun_yorumlari`
 
-Veri durumu:
+Başlangıç veri durumu:
 
 | Veri türü | Kayıt sayısı |
 | --- | ---: |
@@ -115,6 +118,8 @@ Veri durumu:
 | Semantic kayıt | 232 |
 | Query-positive training pair | 1538 |
 
+Ek seed dosyalarıyla demo verisi genişletilebilir. Özellikle `sql/seed/06_extra_products_and_variants.sql` ürün ve varyant çeşitliliğini artırır, `sql/seed/08_extra_product_reviews.sql` ise aktif ürünlerin tamamı için dengeli yorum verisi üretir. Bu dosyalar çalıştırıldıktan sonra kayıt sayıları yerel veritabanı durumuna göre artar.
+
 Önemli SQL dosyaları:
 
 ```text
@@ -126,39 +131,65 @@ sql/seed/02_seed_musteriler_adresler.sql
 sql/seed/03_seed_urunler.sql
 sql/seed/04_seed_siparisler.sql
 sql/seed/05_seed_yorumlar_iadeler_kuponlar.sql
+sql/seed/06_extra_products_and_variants.sql
+sql/seed/07_fix_sku_ascii.sql
+sql/seed/08_extra_product_reviews.sql
 ```
 
 ## 6. Semantic Search Akışı
 
-Semantic search süreci aşağıdaki adımlarla çalışır:
+Semantic search süreci şu adımlarla çalışır:
 
-1. Kullanıcı sorgusu terminalden alınır.
-2. `src/search/query_parser.py` sorgudan intent, fiyat, stok, kategori, marka, puan ve durum filtrelerini çıkarmaya çalışır.
+1. Kullanıcı sorgusu CLI veya Streamlit arayüzünden alınır.
+2. `src/search/query_parser.py` sorgudan intent ve filtre bilgilerini çıkarmaya çalışır.
 3. `src/embedding/model_loader.py` fine-tuned model varsa onu, yoksa base modeli yükler.
-4. `src/search/semantic_search.py` kullanıcı sorgusu için embedding üretir.
-5. PostgreSQL `semantic_index` tablosunda pgvector cosine distance ile en yakın kayıtlar bulunur.
+4. `src/search/semantic_search.py` sorgu embedding'i üretir.
+5. PostgreSQL `semantic_index` tablosunda pgvector cosine distance ile yakın kayıtlar aranır.
 6. Metadata filtreleri uygulanır.
-7. `src/app/answer_generator.py` bulunan sonuçları doğal dile yakın bir cevaba dönüştürür.
-8. `src/app/chat_cli.py` terminal üzerinden demo akışını çalıştırır.
+7. Fiyat veya puan sıralama niyeti varsa sonuçlar buna göre sıralanır.
+8. `src/app/answer_generator.py` sonuçları okunabilir cevaba dönüştürür.
+9. `src/app/chat_cli.py` veya `ui/streamlit_app.py` kullanıcıya demo deneyimi sunar.
+
+`semantic_index` kayıtları `sql/03_embedding_views.sql` içindeki view'lar üzerinden üretilir. Ürün varyantı kayıtlarında metadata içinde marka, kategori, stok, fiyat, SKU, ürün özellikleri ve temiz ürün açıklaması gibi alanlar tutulur.
 
 ## 7. Query Parser Mantığı
 
-Query parser, kullanıcının Türkçe sorgusundan arama niyetini ve filtreleri çıkarmak için kural tabanlı desenler kullanır. Bu katman, semantik aramayı tamamen değiştirmez; semantik arama sonucunu daha anlamlı hale getirmek için ek filtre bilgisi sağlar.
+Query parser kural tabanlı çalışır. Amaç, doğal dil sorgusundan arama motorunun kullanabileceği yapısal filtreleri çıkarmaktır.
 
-Örnekler:
+Çıkarılan başlıca alanlar:
 
-| Sorgu | Çıkarılan bilgiler |
+- `intent`: product, review, cargo, return, order, coupon, customer
+- `source_tables`: aranacak semantic kaynak tabloları
+- `category`: ürün kategorisi
+- `brand`: marka
+- `model_filter`: ürün/model ifadesi
+- `attribute_filters`: renk, beden, numara, depolama, RAM, bağlantı, kapasite gibi özellikler
+- `min_price`, `max_price`: fiyat aralığı
+- `in_stock_only`, `out_of_stock_only`: stok durumu
+- `min_rating`, `max_rating`, `rating_equals`: yorum puanı filtreleri
+- `sort_by`, `sort_direction`: fiyat veya puan sıralaması
+- `status`: kargo, iade veya sipariş durumu
+
+Örnek parser çıktıları:
+
+| Sorgu | Beklenen çıkarım |
 | --- | --- |
-| `1000 TL altı stokta olan kablosuz kulaklık öner` | `intent=product`, `max_price=1000`, `in_stock_only=True`, `category=Kulaklık` |
+| `1000 TL altı stokta olan kablosuz kulaklık öner` | `intent=product`, `max_price=1000`, `in_stock_only=True`, `category=Kulaklık`, `baglanti=Bluetooth` |
+| `iphone 15 mavi` | `intent=product`, `brand=apple`, `category=Telefon`, `model_filter=iPhone 15`, `renk=Mavi` |
+| `poco x6 pro 512 gb` | `intent=product`, `brand=poco`, `category=Telefon`, `model_filter=Poco X6 Pro`, `depolama=512GB` |
+| `32 beden mavi pantolon` | `intent=product`, `category=Pantolon`, `beden=32`, `renk=Mavi` |
+| `42 numara ayakkabı` | `intent=product`, `category=Ayakkabı`, `numara=42` |
 | `teslim edilen kargoları listele` | `intent=cargo`, `status=teslim_edildi` |
-| `yüksek puanlı ayakkabı yorumları` | `intent=review`, `min_rating=4`, `category=Ayakkabı` |
-| `Samsung marka telefonları göster` | `intent=product`, `brand=samsung`, `category=Telefon` |
+| `yüksek puanlı ayakkabı yorumları` | `intent=review`, `category=Ayakkabı`, `min_rating=4`, `sort_by=rating`, `sort_direction=desc` |
+| `kötü yorumlar` | `intent=review`, `max_rating=2`, `sort_by=rating`, `sort_direction=asc` |
+| `1 yıldız yorumlar` | `intent=review`, `rating_equals=1` |
+| `10000 40000 TL arası en pahalı iphone` | `intent=product`, `brand=apple`, `category=Telefon`, `min_price=10000`, `max_price=40000`, `sort_by=price`, `sort_direction=desc` |
 
-Query parser ayarları `config/search.yaml` içinde tutulur. Fiyat, stok, tablo/intent, durum, marka ve kategori filtreleri config üzerinden yönetilebilir.
+Kategori filtreleri üst kategori/alt kategori uyumlu çalışacak şekilde genişletilmiştir. Örneğin `Ayakkabı` sorgusu `Spor Ayakkabı`, `Günlük Ayakkabı`, `Koşu Ayakkabısı` ve `Bot` gibi alt kategorileri de kapsayabilir.
 
 ## 8. Tokenization ve Fine-Tuning Açıklaması
 
-Projede base model olarak aşağıdaki SentenceTransformer modeli kullanılır:
+Base model:
 
 ```text
 sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
@@ -170,25 +201,15 @@ Fine-tuned model çıktı dizini:
 models/ecommerce-semantic-model
 ```
 
-`models/ecommerce-semantic-model` klasörü `.gitignore` içinde tutulur. Bu nedenle model dosyaları GitHub'a gönderilmez. Gerekirse training komutu yeniden çalıştırılarak model tekrar oluşturulur.
+`models/ecommerce-semantic-model` klasörü `.gitignore` içindedir. Model dosyaları GitHub'a gönderilmez; ihtiyaç olduğunda yeniden eğitim komutu ile oluşturulur.
 
-`src/training/tokenizer_demo.py` dosyası tokenization sürecini göstermek için hazırlanmıştır. Bu demo şu kavramları terminalde inceler:
+`src/training/tokenizer_demo.py` tokenization sürecini göstermek için hazırlanmıştır. Bu demo token, token id, vocabulary, attention mask, padding ve truncation kavramlarını terminalde gösterir. Bu modelde özel tokenlar örnek olarak `<s>`, `</s>` ve `<pad>` şeklinde görülür.
 
-- tokenization
-- token
-- token id
-- vocabulary
-- attention mask
-- padding
-- truncation
-
-Bu modelde özel tokenlar örnek olarak `<s>`, `</s>` ve `<pad>` şeklinde görülür.
-
-Fine-tuning sürecinde `data/training_pairs.jsonl` dosyasındaki query-positive pair kayıtları okunur ve SentenceTransformer modeli `MultipleNegativesRankingLoss` ile eğitilir.
+Fine-tuning aşamasında `data/training_pairs.jsonl` dosyasındaki query-positive pair kayıtları okunur ve SentenceTransformer modeli `MultipleNegativesRankingLoss` ile eğitilir.
 
 ## 9. Kurulum
 
-Önce Python sanal ortamı oluşturulur ve bağımlılıklar yüklenir:
+Python sanal ortamı oluşturulur ve bağımlılıklar yüklenir:
 
 ```bash
 python3 -m venv .venv
@@ -196,7 +217,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-PostgreSQL ve pgvector kurulumunun sistemde hazır olduğu varsayılır.
+PostgreSQL ve pgvector eklentisinin sistemde hazır olduğu varsayılır.
 
 ## 10. Config Dosyaları
 
@@ -210,15 +231,13 @@ config/model.yaml
 config/search.yaml
 ```
 
-`config/database.yaml` veritabanı bağlantısını, SQL dosya yollarını ve semantic index tablo adını içerir.
-
-`config/model.yaml` base model adını, fine-tuned model yolunu, embedding boyutunu, tokenizer ayarlarını ve training parametrelerini içerir.
-
-`config/search.yaml` arama limitlerini, similarity ayarlarını, query parser kurallarını ve ranking ağırlıklarını içerir.
+- `config/database.yaml`: Veritabanı bağlantısı, SQL dosya yolları ve semantic index tablo adı.
+- `config/model.yaml`: Base model adı, fine-tuned model yolu, embedding boyutu, tokenizer ve training parametreleri.
+- `config/search.yaml`: Arama limitleri, similarity ayarları, query parser kuralları ve ranking ayarları.
 
 ## 11. Veritabanını Hazırlama
 
-Veritabanı şeması ve örnek veriler aşağıdaki komutlarla hazırlanabilir:
+Şema ve temel seed verileri:
 
 ```bash
 psql -U postgres -d ders -f sql/01_schema.sql
@@ -231,21 +250,37 @@ psql -U postgres -d ders -f sql/seed/05_seed_yorumlar_iadeler_kuponlar.sql
 psql -U postgres -d ders -f sql/03_embedding_views.sql
 ```
 
+Genişletilmiş demo verisi için ek seed dosyaları:
+
+```bash
+psql -U postgres -d ders -f sql/seed/06_extra_products_and_variants.sql
+psql -U postgres -d ders -f sql/seed/07_fix_sku_ascii.sql
+psql -U postgres -d ders -f sql/seed/08_extra_product_reviews.sql
+```
+
+Ek seed dosyalarının amacı:
+
+- `06_extra_products_and_variants.sql`: Tişört, sweatshirt, gömlek, pantolon, mont, ayakkabı, telefon, laptop ve kulaklık kategorilerinde daha gerçekçi ürün/varyant çeşitliliği ekler.
+- `07_fix_sku_ascii.sql`: SKU değerlerinde Türkçe karakter kalmaması için güvenli düzeltme yapar.
+- `08_extra_product_reviews.sql`: Aktif ürünlerin tamamı için 5, 4, 3, 2 ve 1 puan dağılımını içeren gerçekçi yorumlar ekler.
+
 Veritabanı bağlantı bilgileri `config/database.yaml` dosyasından güncellenebilir.
 
 ## 12. Semantic Index Oluşturma
 
-Semantic index tablosu ve embedding view'ları hazırlandıktan sonra semantic kayıtlar için embedding oluşturulur:
+SQL view'ları hazırlandıktan sonra semantic kayıtlar için embedding oluşturulur:
 
 ```bash
 python -m src.embedding.semantic_index_builder
 ```
 
-Model yükleme davranışını kontrol etmek için şu modül de çalıştırılabilir:
+Model yükleme davranışını kontrol etmek için:
 
 ```bash
 python -m src.embedding.model_loader
 ```
+
+Yeni seed dosyaları çalıştırıldıktan sonra semantic index'in tekrar oluşturulması gerekir. Aksi halde yeni ürün, varyant veya yorumlar arama sonuçlarına yansımaz.
 
 ## 13. Training Dataset Üretme
 
@@ -299,30 +334,79 @@ Son ölçüm:
 
 Bu sonuç proje içindeki sınırlı test sorguları üzerinden elde edilmiştir. Daha geniş ve çeşitli test setleri ile farklı sonuçlar alınabilir.
 
-## 16. CLI Demo App Kullanımı
+## 16. CLI ve Streamlit Demo Kullanımı
 
-Terminal tabanlı demo uygulamasını çalıştırmak için:
+Terminal tabanlı demo:
 
 ```bash
 python -m src.app.chat_cli
 ```
 
-Demo sırasında kullanıcı Türkçe doğal dil sorguları girer. Sistem sorguyu analiz eder, semantik arama yapar ve bulunan sonuçları okunabilir bir cevap olarak terminalde gösterir.
+Semantic search test/demo modülü:
+
+```bash
+python -m src.search.semantic_search
+```
+
+Streamlit tabanlı görsel demo:
+
+```bash
+python -m streamlit run ui/streamlit_app.py
+```
+
+Streamlit arayüzünde Windows XP Search Companion stilinde bir sol arama paneli ve sağ tarafta Search Results alanı bulunur. Kullanıcı sorgusu, sonuç sayısı ve teknik detay görünümü buradan kontrol edilebilir. Rover GIF durumu arama öncesi, arama sırasında, sonuç bulunduğunda ve sonuç bulunamadığında farklı görsellerle gösterilir.
 
 ## 17. Örnek Sorgular
 
+Genel ürün sorguları:
+
 ```text
 1000 TL altı stokta olan kablosuz kulaklık öner
-Samsung marka telefonları göster
-teslim edilen kargoları listele
-yüksek puanlı ayakkabı yorumları
-stokta olan laptop modellerini getir
-indirim kuponlarını listele
-iade edilen siparişleri göster
-kahve makinesi ile ilgili yorumları bul
+s beden siyah tişört
+l beden lacivert tişört
+bordo sweatshirt
+haki mont
+42 numara ayakkabı
+32 beden mavi pantolon
+32/32 mavi pantolon
 ```
 
-Modülleri tek tek denemek için kullanılabilecek komutlar:
+Telefon ve laptop sorguları:
+
+```text
+iphone 15 mavi
+samsung s23 gri
+redmi note 13 pro
+poco x6 pro 512 gb
+macbook air m2 8 gb
+hp victus 16 oyuncu laptop
+32 gb ram oyuncu laptop
+```
+
+Fiyat ve sıralama sorguları:
+
+```text
+10000 40000 TL arası iphone
+40000 TL altı iphone
+10000 TL üstü telefon
+pahalı telefon
+en ucuz laptop
+10000 40000 TL arası en pahalı iphone
+```
+
+Yorum, kargo ve iade sorguları:
+
+```text
+yüksek puanlı ayakkabı yorumları
+düşük puanlı iphone yorumları
+kötü yorumlar
+1 yıldız yorumlar
+samsung s23 yorumları
+teslim edilen kargoları listele
+hasarlı gelen ürün iadelerini göster
+```
+
+Modülleri tek tek denemek için:
 
 ```bash
 python -m src.database.db
@@ -335,6 +419,7 @@ python -m src.training.dataset_builder
 python -m src.training.train_sentence_transformer
 python -m src.evaluation.evaluate_retrieval
 python -m src.app.chat_cli
+python -m streamlit run ui/streamlit_app.py
 ```
 
 ## 18. Proje Klasör Yapısı
@@ -358,7 +443,10 @@ python -m src.app.chat_cli
 │       ├── 02_seed_musteriler_adresler.sql
 │       ├── 03_seed_urunler.sql
 │       ├── 04_seed_siparisler.sql
-│       └── 05_seed_yorumlar_iadeler_kuponlar.sql
+│       ├── 05_seed_yorumlar_iadeler_kuponlar.sql
+│       ├── 06_extra_products_and_variants.sql
+│       ├── 07_fix_sku_ascii.sql
+│       └── 08_extra_product_reviews.sql
 ├── src/
 │   ├── app/
 │   │   ├── answer_generator.py
@@ -378,6 +466,14 @@ python -m src.app.chat_cli
 │   │   ├── tokenizer_demo.py
 │   │   └── train_sentence_transformer.py
 │   └── config_loader.py
+├── ui/
+│   ├── assets/
+│   │   └── rover/
+│   │       ├── rover_idle.gif
+│   │       ├── rover_searching.gif
+│   │       ├── rover_result.gif
+│   │       └── rover_not_found.gif
+│   └── streamlit_app.py
 ├── requirements.txt
 └── README.md
 ```
@@ -388,31 +484,35 @@ python -m src.app.chat_cli
 - `src/database/db.py`: Veritabanı bağlantısı ve temel kontrol işlemleri için kullanılır.
 - `src/embedding/model_loader.py`: Fine-tuned model varsa onu, yoksa base modeli yükler.
 - `src/embedding/semantic_index_builder.py`: Semantic kayıtlar için embedding üretir ve veritabanına yazar.
-- `src/search/query_parser.py`: Doğal dil sorgularından intent ve filtre bilgilerini çıkarmaya çalışır.
-- `src/search/semantic_search.py`: pgvector üzerinden semantik arama yapar.
+- `src/search/query_parser.py`: Doğal dil sorgularından intent, kategori, marka, model, özellik, fiyat, puan ve sıralama bilgilerini çıkarmaya çalışır.
+- `src/search/semantic_search.py`: pgvector üzerinden filtreli semantik arama yapar.
 - `src/training/tokenizer_demo.py`: Tokenizer davranışını gösteren demo modüldür.
 - `src/training/dataset_builder.py`: Training için JSONL query-positive pair dosyası üretir.
 - `src/training/train_sentence_transformer.py`: SentenceTransformer fine-tuning işlemini yapar.
 - `src/evaluation/evaluate_retrieval.py`: Retrieval başarısını Top-1 ve Top-5 metrikleri ile ölçer.
 - `src/app/answer_generator.py`: Arama sonuçlarını kullanıcıya okunabilir cevaba dönüştürür.
 - `src/app/chat_cli.py`: Terminal tabanlı demo uygulamasıdır.
+- `ui/streamlit_app.py`: Windows XP Search Companion tarzında Streamlit demo arayüzüdür.
 
 ## 19. Notlar ve Sınırlamalar
 
 - Bu proje gerçek üretim sistemi değildir; okul projesi/prototip seviyesindedir.
-- Veri seti sınırlıdır ve demo amaçlı oluşturulmuştur.
-- Query parser kural tabanlıdır; her Türkçe sorguyu eksiksiz anlaması beklenmez.
-- Evaluation sonucu küçük bir test sorgu seti üzerinden hesaplanmıştır.
+- Veri seti demo amaçlıdır. Ek seed dosyalarıyla genişletilmiş olsa da gerçek e-ticaret katalog ölçeğini temsil etmez.
+- Query parser kural tabanlıdır; tüm Türkçe sorgu varyasyonlarını eksiksiz anlaması beklenmez.
+- Attribute, model, kategori ve fiyat filtreleri demo verisinin metadata yapısına göre tasarlanmıştır.
+- Semantic arama kalitesi embedding modeline, training verisine ve metadata temizliğine bağlıdır.
 - Fine-tuned model klasörü GitHub'a yüklenmez; gerektiğinde yeniden eğitilmelidir.
-- Veritabanı bağlantı bilgileri yerel geliştirme ortamına göre güncellenmelidir.
-- LLM asistanı cevabı, bulunan semantik kayıtlar ve basit cevap üretimi üzerine kuruludur; kapsamlı bir agent mimarisi değildir.
+- Evaluation sonucu küçük ve kontrollü bir test sorgu seti üzerinden hesaplanmıştır.
+- LLM asistanı cevabı, bulunan semantic kayıtlar ve basit cevap üretimi üzerine kuruludur; kapsamlı bir agent mimarisi değildir.
+- Streamlit arayüzü sunum ve demo amaçlıdır; kullanıcı yönetimi, güvenlik, loglama ve ölçeklenebilirlik gibi üretim gereksinimlerini kapsamaz.
 
 ## 20. Gelecek Geliştirmeler
 
-- Daha geniş ve çeşitli training dataset hazırlanabilir.
+- Daha geniş ve gerçekçi training/evaluation dataset hazırlanabilir.
 - Query parser için daha esnek NLP tabanlı yaklaşımlar eklenebilir.
-- Değerlendirme seti büyütülerek daha güvenilir metrikler elde edilebilir.
-- Web arayüzü veya API katmanı eklenebilir.
-- Kullanıcı geri bildirimleri ile retrieval kalitesi iyileştirilebilir.
-- Kategori, marka ve fiyat filtreleri için daha ayrıntılı ranking stratejileri denenebilir.
+- Attribute filtrelerinde eş anlamlı kelime ve toleranslı eşleşme desteği geliştirilebilir.
+- API katmanı eklenerek arama servisi ayrı bir backend olarak sunulabilir.
+- Streamlit arayüzü yerine daha kapsamlı bir web frontend geliştirilebilir.
+- Kullanıcı geri bildirimleri ile retrieval ve ranking kalitesi iyileştirilebilir.
 - Docker tabanlı kurulum dosyaları eklenerek ortam kurulumu kolaylaştırılabilir.
+- Test kapsamı parser, semantic search ve seed veri kontrollerini daha sistematik ölçecek şekilde genişletilebilir.
