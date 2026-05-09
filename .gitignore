@@ -1,0 +1,26 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# macOS
+.DS_Store
+
+# Environment variables
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model outputs / cache
+models/ecommerce-semantic-model/
+data/*.cache
+
+# Hugging Face / Torch cache if accidentally created in project
+.cache/
+huggingface/
