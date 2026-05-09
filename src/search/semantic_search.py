@@ -68,10 +68,16 @@ def build_filter_conditions(parsed_query: ParsedQuery) -> tuple[list[str], dict[
     return conditions, params
 
 
-def semantic_search(query_text: str, limit: int | None = None) -> list[dict[str, Any]]:
+def semantic_search(
+    query_text: str,
+    limit: int | None = None,
+    verbose: bool = False,
+) -> list[dict[str, Any]]:
     """
     Kullanıcı sorgusunu parse eder, embedding'e çevirir ve semantic_index tablosunda
     filtreli semantik arama yapar.
+
+    verbose=True verilirse ara adımları terminale yazdırır.
     """
     search_config = get_search_config()
 
@@ -82,16 +88,20 @@ def semantic_search(query_text: str, limit: int | None = None) -> list[dict[str,
     limit = min(limit, max_limit)
 
     parsed_query = parse_query(query_text)
-
     embedding_text = parsed_query.search_text or parsed_query.original_query
 
-    print("Parsed query:")
-    print(parsed_query.to_dict())
+    if verbose:
+        print("Parsed query:")
+        print(parsed_query.to_dict())
 
-    print("Embedding modeli yükleniyor...")
+    if verbose:
+        print("Embedding modeli yükleniyor...")
+
     model = load_embedding_model()
 
-    print("Sorgu embedding'e çevriliyor...")
+    if verbose:
+        print("Sorgu embedding'e çevriliyor...")
+
     query_embedding = encode_text(model, embedding_text)
 
     conditions, filter_params = build_filter_conditions(parsed_query)
