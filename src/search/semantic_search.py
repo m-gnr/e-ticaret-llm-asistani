@@ -149,6 +149,14 @@ def build_filter_conditions(parsed_query: ParsedQuery) -> tuple[list[str], dict[
     return conditions, params
 
 
+def build_order_by_clause(parsed_query: ParsedQuery) -> str:
+    if parsed_query.sort_by == "price":
+        direction = "DESC" if parsed_query.sort_direction == "desc" else "ASC"
+        return f"price {direction} NULLS LAST, distance ASC"
+
+    return "distance ASC"
+
+
 def semantic_search(
     query_text: str,
     limit: int | None = None,
@@ -187,6 +195,7 @@ def semantic_search(
 
     conditions, filter_params = build_filter_conditions(parsed_query)
     where_sql = " AND ".join(conditions)
+    order_by_sql = build_order_by_clause(parsed_query)
 
     sql = f"""
         SELECT
@@ -195,10 +204,11 @@ def semantic_search(
             baslik,
             icerik,
             metadata,
-            embedding <=> %(query_embedding)s AS distance
+            embedding <=> %(query_embedding)s AS distance,
+            NULLIF(metadata->>'satis_fiyati', '')::numeric AS price
         FROM public.semantic_index
         WHERE {where_sql}
-        ORDER BY embedding <=> %(query_embedding)s
+        ORDER BY {order_by_sql}
         LIMIT %(limit)s;
     """
 
@@ -282,6 +292,16 @@ def run_demo() -> None:
         "poco 512 gb",
         "32 gb ram oyuncu laptop",
         "32/32 mavi pantolon",
+        "10000 40000 tl arası iphone",
+        "10000 tl ile 40000 tl arası iphone",
+        "40000 tl altı iphone",
+        "10000 tl üstü telefon",
+        "pahalı telefon",
+        "en pahalı telefon",
+        "ucuz telefon",
+        "en ucuz laptop",
+        "pahalı iphone",
+        "10000 40000 tl arası en pahalı iphone",
         "pembe kulaklık",
         "1000 TL altı stokta olan kablosuz kulaklık öner",
         "teslim edilen kargoları listele",

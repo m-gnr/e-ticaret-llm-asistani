@@ -18,6 +18,8 @@ class ParsedQuery:
     brand: str | None = None
     status: str | None = None
     model_filter: str | None = None
+    sort_by: str | None = None
+    sort_direction: str | None = None
     attribute_filters: dict[str, str | int | float | bool] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -503,6 +505,12 @@ STATUS_KEYWORDS = {
 }
 
 
+SORT_PATTERNS = [
+    ("price", "desc", ["en pahalı", "pahalı", "yüksek fiyatlı", "yuksek fiyatli", "fiyatı yüksek", "fiyati yuksek"]),
+    ("price", "asc", ["en ucuz", "ucuz", "uygun fiyatlı", "uygun fiyatli", "düşük fiyatlı", "dusuk fiyatli"]),
+]
+
+
 def normalize_text(text: str) -> str:
     return text.lower().strip()
 
@@ -543,6 +551,31 @@ def format_regex_attribute_value(match: re.Match[str], value_format: str) -> str
     raw_number = match.group(1).replace(",", ".")
     number = raw_number[:-2] if raw_number.endswith(".0") else raw_number
     return value_format.format(n=number)
+
+
+def parse_price_number(value: str) -> float:
+    normalized = value.replace(".", "").replace(",", ".")
+    return float(normalized)
+
+
+def extract_price_range(text: str) -> tuple[float | None, float | None]:
+    number = r"(\d+(?:[.,]\d{3})*(?:[.,]\d+)?)"
+    patterns = [
+        rf"{number}\s+{number}\s*tl\s*arası",
+        rf"{number}\s*tl\s+ile\s+{number}\s*tl\s*arası",
+        rf"{number}\s*-\s*{number}\s*tl\s*arası",
+        rf"{number}\s*den\s+{number}\s*e\s*kadar",
+        rf"{number}\s*'den\s+{number}\s*'e\s*kadar",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            first = parse_price_number(match.group(1))
+            second = parse_price_number(match.group(2))
+            return min(first, second), max(first, second)
+
+    return None, None
 
 
 def extract_beden_filter(text: str) -> str | None:
@@ -894,6 +927,14 @@ def detect_status(text: str) -> str | None:
     return None
 
 
+def detect_sort_intent(text: str) -> tuple[str | None, str | None]:
+    for sort_by, sort_direction, keywords in SORT_PATTERNS:
+        if any(keyword in text for keyword in keywords):
+            return sort_by, sort_direction
+
+    return None, None
+
+
 def clean_search_text(text: str) -> str:
     cleaned = text
 
@@ -902,6 +943,11 @@ def clean_search_text(text: str) -> str:
         r"\d+(?:[.,]\d+)?\s*tl\s*altında",
         r"\d+(?:[.,]\d+)?\s*tl\s*aşağısı",
         r"\d+(?:[.,]\d+)?\s*tl\s*ye\s*kadar",
+        r"\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s+\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*tl\s*arası",
+        r"\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*tl\s+ile\s+\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*tl\s*arası",
+        r"\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*-\s*\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*tl\s*arası",
+        r"\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*den\s+\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*e\s*kadar",
+        r"\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*'den\s+\d+(?:[.,]\d{3})*(?:[.,]\d+)?\s*'e\s*kadar",
         r"en fazla\s*\d+(?:[.,]\d+)?\s*tl",
         r"maksimum\s*\d+(?:[.,]\d+)?\s*tl",
         r"stokta olan",
@@ -913,6 +959,18 @@ def clean_search_text(text: str) -> str:
         r"listele",
         r"göster",
         r"goster",
+        r"en pahalı",
+        r"pahalı",
+        r"yüksek fiyatlı",
+        r"yuksek fiyatli",
+        r"fiyatı yüksek",
+        r"fiyati yuksek",
+        r"en ucuz",
+        r"ucuz",
+        r"uygun fiyatlı",
+        r"uygun fiyatli",
+        r"düşük fiyatlı",
+        r"dusuk fiyatli",
     ]
 
     for pattern in remove_patterns:
@@ -925,8 +983,9 @@ def clean_search_text(text: str) -> str:
 def parse_query(query: str) -> ParsedQuery:
     normalized = normalize_text(query)
 
-    max_price = extract_max_price(normalized)
-    min_price = extract_min_price(normalized)
+    range_min_price, range_max_price = extract_price_range(normalized)
+    max_price = range_max_price if range_max_price is not None else extract_max_price(normalized)
+    min_price = range_min_price if range_min_price is not None else extract_min_price(normalized)
     in_stock_only, out_of_stock_only = extract_stock_filter(normalized)
     min_rating = extract_min_rating(normalized)
     category = detect_category(normalized)
@@ -943,6 +1002,7 @@ def parse_query(query: str) -> ParsedQuery:
         intent = "product"
 
     source_tables = INTENT_TABLES.get(intent, [])
+    sort_by, sort_direction = detect_sort_intent(normalized)
 
     return ParsedQuery(
         original_query=query,
@@ -958,6 +1018,8 @@ def parse_query(query: str) -> ParsedQuery:
         brand=brand,
         status=status,
         model_filter=model_filter,
+        sort_by=sort_by,
+        sort_direction=sort_direction,
         attribute_filters=attribute_filters,
     )
 
@@ -1003,6 +1065,16 @@ def run_demo() -> None:
         "32 beden mavi pantolon",
         "32/32 mavi pantolon",
         "34/32 mavi pantolon",
+        "10000 40000 tl arası iphone",
+        "10000 tl ile 40000 tl arası iphone",
+        "40000 tl altı iphone",
+        "10000 tl üstü telefon",
+        "pahalı telefon",
+        "en pahalı telefon",
+        "ucuz telefon",
+        "en ucuz laptop",
+        "pahalı iphone",
+        "10000 40000 tl arası en pahalı iphone",
         "hasarlı gelen ürün iadelerini göster",
         "teslim edilen kargoları listele",
         "oyuncu mouse öner",

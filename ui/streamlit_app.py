@@ -702,6 +702,8 @@ def render_parsed_query(parsed_query: Any) -> None:
             st.write("**Stokta:**", parsed_query.in_stock_only)
             st.write("**Stokta olmayan:**", parsed_query.out_of_stock_only)
             st.write("**Durum:**", parsed_query.status)
+            st.write("**Sıralama alanı:**", parsed_query.sort_by or "Yok")
+            st.write("**Sıralama yönü:**", parsed_query.sort_direction or "Yok")
 
         st.write("**Arama metni:**", parsed_query.search_text)
         st.write("**Kaynak tablolar:**", parsed_query.source_tables)
