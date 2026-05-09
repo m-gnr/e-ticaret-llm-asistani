@@ -11,6 +11,52 @@ SEMANTIC_SOURCE_VIEW = "vw_semantic_all"
 SEMANTIC_INDEX_TABLE = "semantic_index"
 
 
+def fetch_product_descriptions() -> dict[str, str]:
+    """
+    Ürün varyantı kayıtları için temiz ürün açıklamalarını okur.
+
+    vw_semantic_urunler embedding metninde açıklamayı kullanır; bu fonksiyon
+    aynı açıklamayı UI tarafında temiz gösterebilmek için metadata'ya eklemek
+    üzere varyant_id -> aciklama eşlemesi döndürür.
+    """
+    query = """
+        SELECT
+            uv.varyant_id,
+            u.aciklama
+        FROM public.urun_varyantlari uv
+        JOIN public.urunler u
+            ON u.urun_id = uv.urun_id
+        WHERE u.aciklama IS NOT NULL
+          AND btrim(u.aciklama) <> '';
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+
+    return {str(row[0]): row[1] for row in rows}
+
+
+def enrich_product_variant_metadata(records: list[dict[str, Any]]) -> None:
+    """
+    urun_varyantlari semantic kayıtlarının metadata alanına temiz açıklama ekler.
+    """
+    product_descriptions = fetch_product_descriptions()
+
+    for record in records:
+        if record["kaynak_tablo"] != "urun_varyantlari":
+            continue
+
+        description = product_descriptions.get(str(record["kaynak_id"]))
+        if not description:
+            continue
+
+        metadata = dict(record["metadata"] or {})
+        metadata["aciklama"] = description
+        record["metadata"] = metadata
+
+
 def fetch_semantic_records() -> list[dict[str, Any]]:
     """
     vw_semantic_all view'ından embedding üretilecek kayıtları okur.
@@ -51,6 +97,8 @@ def fetch_semantic_records() -> list[dict[str, Any]]:
                 "metadata": row[4],
             }
         )
+
+    enrich_product_variant_metadata(records)
 
     return records
 

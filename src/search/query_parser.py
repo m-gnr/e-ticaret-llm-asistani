@@ -1,5 +1,5 @@
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Any
 
 
@@ -17,6 +17,7 @@ class ParsedQuery:
     category: str | None = None
     brand: str | None = None
     status: str | None = None
+    attribute_filters: dict[str, str | int | float | bool] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -85,6 +86,9 @@ INTENT_KEYWORDS = {
         "urun",
         "öner",
         "oner",
+        "göster",
+        "goster",
+        "listele",
         "tavsiye",
         "satın al",
         "satin al",
@@ -93,7 +97,15 @@ INTENT_KEYWORDS = {
         "mouse",
         "klavye",
         "laptop",
+        "bilgisayar",
+        "tablet",
         "telefon",
+        "iphone",
+        "galaxy",
+        "monitör",
+        "monitor",
+        "powerbank",
+        "sweatshirt",
         "ayakkabı",
         "ayakkabi",
         "tişört",
@@ -128,7 +140,9 @@ CATEGORY_KEYWORDS = {
     "Mouse": ["mouse", "fare", "kablosuz mouse"],
     "Klavye": ["klavye", "keyboard", "kablosuz klavye"],
     "Laptop": ["laptop", "dizüstü", "dizustu", "notebook"],
-    "Telefon": ["telefon", "akıllı telefon", "akilli telefon"],
+    "Telefon": ["telefon", "akıllı telefon", "akilli telefon", "iphone", "galaxy"],
+    "Tablet": ["tablet"],
+    "Monitör": ["monitör", "monitor"],
     "Şarj Cihazı": [
         "şarj cihazı",
         "sarj cihazi",
@@ -149,33 +163,152 @@ CATEGORY_KEYWORDS = {
 }
 
 
-BRAND_KEYWORDS = [
-    "sony",
-    "samsung",
-    "apple",
-    "xiaomi",
-    "logitech",
-    "philips",
-    "arzum",
-    "monster",
-    "lenovo",
-    "asus",
-    "msi",
-    "hp",
-    "dell",
-    "jbl",
-    "anker",
-    "huawei",
-    "kingston",
-    "corsair",
-    "razer",
-    "dyson",
-    "nike",
-    "adidas",
-    "puma",
-    "lc waikiki",
-    "mavi",
-    "defacto",
+BRAND_ALIASES = {
+    "iphone": "apple",
+    "apple": "apple",
+    "samsung": "samsung",
+    "galaxy": "samsung",
+    "xiaomi": "xiaomi",
+    "sony": "sony",
+    "jbl": "jbl",
+    "razer": "razer",
+    "logitech": "logitech",
+    "philips": "philips",
+    "arzum": "arzum",
+    "monster": "monster",
+    "lenovo": "lenovo",
+    "asus": "asus",
+    "msi": "msi",
+    "hp": "hp",
+    "dell": "dell",
+    "anker": "anker",
+    "huawei": "huawei",
+    "kingston": "kingston",
+    "corsair": "corsair",
+    "dyson": "dyson",
+    "nike": "nike",
+    "adidas": "adidas",
+    "puma": "puma",
+    "lc waikiki": "lc waikiki",
+    "mavi": "mavi",
+    "defacto": "defacto",
+}
+
+
+COLOR_VALUES = {
+    "siyah": "Siyah",
+    "beyaz": "Beyaz",
+    "mavi": "Mavi",
+    "pembe": "Pembe",
+    "gri": "Gri",
+    "kırmızı": "Kırmızı",
+    "kirmizi": "Kırmızı",
+    "yeşil": "Yeşil",
+    "yesil": "Yeşil",
+    "kahverengi": "Kahverengi",
+    "gümüş": "Gümüş",
+    "gumus": "Gümüş",
+}
+
+
+ATTRIBUTE_PATTERNS = [
+    {
+        "key": "ram",
+        "regex_patterns": [
+            r"\b(\d+)\s*gb\s*ram\b",
+            r"\bram\s*(\d+)\s*gb\b",
+        ],
+        "value_format": "{n}GB",
+    },
+    {
+        "key": "depolama",
+        "regex_patterns": [r"\b(\d+)\s*gb\b"],
+        "value_format": "{n}GB",
+        "context_keywords": [
+            "iphone",
+            "telefon",
+            "galaxy",
+            "tablet",
+            "akıllı telefon",
+            "akilli telefon",
+        ],
+        "exclude_near_keywords": ["ram"],
+    },
+    {
+        "key": "baglanti",
+        "keyword_values": {
+            "bluetooth": "Bluetooth",
+            "kablosuz": "Bluetooth",
+            "kablolu": "Kablolu",
+        },
+    },
+    {
+        "key": "renk",
+        "keyword_values": COLOR_VALUES,
+    },
+    {
+        "key": "yenileme_hizi",
+        "regex_patterns": [r"\b(\d+)\s*hz\b"],
+        "value_format": "{n}Hz",
+    },
+    {
+        "key": "ekran_boyutu",
+        "regex_patterns": [r"\b(\d+(?:[.,]\d+)?)\s*(inç|inch|inc)\b"],
+        "value_format": "{n} inç",
+    },
+    {
+        "key": "kapasite",
+        "regex_patterns": [r"\b(\d+)\s*mah\b"],
+        "value_format": "{n} mAh",
+    },
+    {
+        "key": "oyuncu",
+        "keyword_values": {
+            "oyuncu": True,
+            "gaming": True,
+        },
+    },
+    {
+        "key": "kumas",
+        "keyword_values": {
+            "pamuklu": "Pamuk",
+            "pamuk": "Pamuk",
+            "denim": "Denim",
+        },
+        "context_keywords": [
+            "tişört",
+            "tisort",
+            "tshirt",
+            "t-shirt",
+            "gömlek",
+            "gomlek",
+            "sweatshirt",
+            "pantolon",
+        ],
+    },
+]
+
+
+CLOTHING_CONTEXT_KEYWORDS = [
+    "tişört",
+    "tisort",
+    "tshirt",
+    "t-shirt",
+    "gömlek",
+    "gomlek",
+    "sweatshirt",
+    "pantolon",
+    "mont",
+]
+
+
+SHOE_CONTEXT_KEYWORDS = [
+    "ayakkabı",
+    "ayakkabi",
+    "ayakkabılar",
+    "ayakkabilar",
+    "sneaker",
+    "bot",
 ]
 
 
@@ -194,6 +327,137 @@ STATUS_KEYWORDS = {
 
 def normalize_text(text: str) -> str:
     return text.lower().strip()
+
+
+def normalize_query_text(text: str) -> str:
+    """
+    Sorguyu attribute çıkarımı için küçük harfe indirir ve fazla boşlukları temizler.
+    """
+    return re.sub(r"\s+", " ", normalize_text(text))
+
+
+def normalize_attribute_value(value: Any) -> str | int | float | bool:
+    """
+    Attribute değerlerini metadata'daki yazıma yakın, sade bir forma getirir.
+    """
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, (int, float)):
+        return value
+
+    if value is None:
+        return ""
+
+    return str(value).strip()
+
+
+def has_any_keyword(text: str, keywords: list[str]) -> bool:
+    return any(keyword in text for keyword in keywords)
+
+
+def match_has_excluded_context(text: str, start: int, end: int, keywords: list[str]) -> bool:
+    nearby_text = text[max(0, start - 8) : min(len(text), end + 8)]
+    return any(keyword in nearby_text for keyword in keywords)
+
+
+def format_regex_attribute_value(match: re.Match[str], value_format: str) -> str:
+    raw_number = match.group(1).replace(",", ".")
+    number = raw_number[:-2] if raw_number.endswith(".0") else raw_number
+    return value_format.format(n=number)
+
+
+def extract_beden_filter(text: str) -> str | None:
+    patterns = [
+        r"\b(xs|s|m|l|xl|xxl)\s*beden\b",
+        r"\bbeden\s*(xs|s|m|l|xl|xxl)\b",
+        r"\b(xs|s|m|l|xl|xxl)\s*(tişört|tisort|tshirt|t-shirt|gömlek|gomlek|sweatshirt|pantolon)\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).upper()
+
+    if has_any_keyword(text, CLOTHING_CONTEXT_KEYWORDS):
+        match = re.search(r"\b(xs|s|m|l|xl|xxl)\b", text)
+        if match:
+            return match.group(1).upper()
+
+    return None
+
+
+def extract_numara_filter(text: str) -> str | None:
+    patterns = [
+        r"\b(\d{2})\s*numara\b",
+        r"\bnumara\s*(\d{2})\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+
+    if has_any_keyword(text, SHOE_CONTEXT_KEYWORDS):
+        match = re.search(r"\b(3[5-9]|4[0-9])\b", text)
+        if match:
+            return match.group(1)
+
+    return None
+
+
+def extract_attribute_filters(query: str) -> dict[str, str | int | float | bool]:
+    """
+    Sorgudaki ürün özelliklerini semantic_index.metadata.ozellikler alanına
+    uygulanabilecek filtrelere dönüştürür.
+    """
+    text = normalize_query_text(query)
+    filters: dict[str, str | int | float | bool] = {}
+
+    for definition in ATTRIBUTE_PATTERNS:
+        key = definition["key"]
+        context_keywords = definition.get("context_keywords")
+
+        if context_keywords and not has_any_keyword(text, context_keywords):
+            continue
+
+        for keyword, value in definition.get("keyword_values", {}).items():
+            if re.search(rf"\b{re.escape(keyword)}\b", text):
+                filters[key] = normalize_attribute_value(value)
+                break
+
+        if key in filters:
+            continue
+
+        for pattern in definition.get("regex_patterns", []):
+            match = re.search(pattern, text)
+            if not match:
+                continue
+
+            exclude_keywords = definition.get("exclude_near_keywords", [])
+            if exclude_keywords and match_has_excluded_context(
+                text,
+                match.start(),
+                match.end(),
+                exclude_keywords,
+            ):
+                continue
+
+            value_format = definition.get("value_format", "{n}")
+            filters[key] = normalize_attribute_value(
+                format_regex_attribute_value(match, value_format)
+            )
+            break
+
+    beden = extract_beden_filter(text)
+    if beden is not None:
+        filters["beden"] = beden
+
+    numara = extract_numara_filter(text)
+    if numara is not None:
+        filters["numara"] = numara
+
+    return filters
 
 
 def extract_max_price(text: str) -> float | None:
@@ -308,8 +572,8 @@ def detect_category(text: str) -> str | None:
 
 
 def detect_brand(text: str) -> str | None:
-    for brand in BRAND_KEYWORDS:
-        if brand in text:
+    for keyword, brand in BRAND_ALIASES.items():
+        if re.search(rf"\b{re.escape(keyword)}\b", text):
             return brand
 
     return None
@@ -364,6 +628,7 @@ def parse_query(query: str) -> ParsedQuery:
     category = detect_category(normalized)
     brand = detect_brand(normalized)
     status = detect_status(normalized)
+    attribute_filters = extract_attribute_filters(normalized)
     search_text = clean_search_text(normalized)
 
     return ParsedQuery(
@@ -379,12 +644,28 @@ def parse_query(query: str) -> ParsedQuery:
         category=category,
         brand=brand,
         status=status,
+        attribute_filters=attribute_filters,
     )
 
 
 def run_demo() -> None:
     test_queries = [
+        "iphone 64 gb",
+        "iphone 128 gb",
+        "samsung galaxy 128 gb",
+        "bluetooth kulaklık",
+        "kablolu oyuncu mouse",
+        "siyah kulaklık",
+        "27 inç 165hz monitör",
+        "20000 mah powerbank",
+        "16 gb ram laptop",
+        "stokta siyah bluetooth kulaklık",
         "1000 TL altı stokta olan kablosuz kulaklık öner",
+        "s beden tişört",
+        "m beden siyah tişört",
+        "xl sweatshirt",
+        "42 numara ayakkabı",
+        "41 ayakkabı",
         "hasarlı gelen ürün iadelerini göster",
         "teslim edilen kargoları listele",
         "oyuncu mouse öner",

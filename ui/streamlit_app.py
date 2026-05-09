@@ -1,5 +1,7 @@
 from pathlib import Path
 from typing import Any
+import html
+import re
 import sys
 
 import streamlit as st
@@ -645,6 +647,12 @@ def render_left_panel() -> tuple[str, int, bool, bool]:
     return query, result_limit, search_clicked and bool(query.strip()), show_debug
 
 
+def format_answer_html(answer: str) -> str:
+    escaped_answer = html.escape(answer)
+    formatted_answer = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", escaped_answer)
+    return formatted_answer.replace("\n", "<br>")
+
+
 def render_answer(answer: str) -> None:
     st.markdown('<div class="result-header">Search Results</div>', unsafe_allow_html=True)
 
@@ -662,7 +670,7 @@ def render_answer(answer: str) -> None:
         )
         return
 
-    html_answer = answer.replace("\n", "<br>")
+    html_answer = format_answer_html(answer)
     st.markdown(
         f"""
         <div class="answer-box">
@@ -697,6 +705,10 @@ def render_parsed_query(parsed_query: Any) -> None:
 
         st.write("**Arama metni:**", parsed_query.search_text)
         st.write("**Kaynak tablolar:**", parsed_query.source_tables)
+        st.write(
+            "**Özellik filtreleri:**",
+            parsed_query.attribute_filters or "Yok",
+        )
 
 
 def shorten_text(text: str, max_length: int = 240) -> str:
