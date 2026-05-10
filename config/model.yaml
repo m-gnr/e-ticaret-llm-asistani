@@ -37,5 +37,23 @@ dataset_split:
   shuffle: true
   output_dir: "data"
 
+evaluation:
+  split_retrieval:
+    default_limit: 5
+    default_query_types:
+      - specific
+      - navigational
+    default_evaluation_mode: exact_id
+    default_source_tables:
+      - urun_varyantlari
+      - siparisler
+      - kargolar
+      - iadeler
+      - kuponlar
+      - musteriler
+    random_sample: false
+    seed: 42
+    max_failures: 20
+
 loss:
   name: "MultipleNegativesRankingLoss"
