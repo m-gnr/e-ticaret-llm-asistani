@@ -18,7 +18,23 @@ def get_model_config() -> dict[str, Any]:
 
 def get_training_config() -> dict[str, Any]:
     config = load_yaml_config("config/model.yaml")
-    return config["training"]
+    training_config = config["training"]
+
+    required_keys = [
+        "train_dataset_path",
+        "validation_dataset_path",
+        "test_dataset_path",
+        "output_dir",
+    ]
+    missing_keys = [key for key in required_keys if key not in training_config]
+
+    if missing_keys:
+        raise KeyError(
+            "Eksik training config alanları: "
+            + ", ".join(missing_keys)
+        )
+
+    return training_config
 
 
 def get_loss_config() -> dict[str, Any]:
@@ -42,7 +58,11 @@ def load_training_pairs(dataset_path: str) -> list[dict[str, Any]]:
     full_path = get_project_root() / dataset_path
 
     if not full_path.exists():
-        raise FileNotFoundError(f"Training dataset bulunamadı: {full_path}")
+        raise FileNotFoundError(
+            f"Training split dosyası bulunamadı: {full_path}\n"
+            "Önce şu komutu çalıştırın:\n"
+            "python -m src.training.split_training_dataset"
+        )
 
     pairs: list[dict[str, Any]] = []
 
@@ -108,6 +128,8 @@ def train() -> None:
     set_seed(seed)
 
     dataset_path = training_config["train_dataset_path"]
+    validation_dataset_path = training_config.get("validation_dataset_path")
+    test_dataset_path = training_config.get("test_dataset_path")
     output_dir = training_config["output_dir"]
 
     batch_size = int(training_config.get("batch_size", 16))
@@ -121,7 +143,9 @@ def train() -> None:
     print("FINE-TUNING BAŞLIYOR")
     print("=" * 80)
     print(f"Base model       : {base_model_name}")
-    print(f"Dataset          : {dataset_path}")
+    print(f"Train dataset    : {dataset_path}")
+    print(f"Validation set   : {validation_dataset_path}")
+    print(f"Test set         : {test_dataset_path}")
     print(f"Output directory : {output_dir}")
     print(f"Epochs           : {epochs}")
     print(f"Batch size       : {batch_size}")

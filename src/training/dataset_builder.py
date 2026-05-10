@@ -2,11 +2,18 @@ import json
 from pathlib import Path
 from typing import Any
 
-from src.config_loader import get_project_root
+from src.config_loader import get_project_root, load_yaml_config
 from src.database.db import get_db_connection
 
 
-OUTPUT_PATH = "data/training_pairs.jsonl"
+def get_training_config() -> dict[str, Any]:
+    config = load_yaml_config("config/model.yaml")
+    return config["training"]
+
+
+def get_output_path() -> str:
+    training_config = get_training_config()
+    return training_config["full_dataset_path"]
 
 
 def fetch_semantic_records() -> list[dict[str, Any]]:
@@ -386,7 +393,7 @@ def run() -> None:
     pairs = build_training_pairs(records)
     print(f"Üretilen training pair sayısı: {len(pairs)}")
 
-    output_file = save_jsonl(pairs, OUTPUT_PATH)
+    output_file = save_jsonl(pairs, get_output_path())
     print(f"Training dataset kaydedildi: {output_file}")
 
     print("\nİlk 5 örnek:")

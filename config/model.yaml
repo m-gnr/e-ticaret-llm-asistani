@@ -14,7 +14,10 @@ tokenizer:
   padding: "max_length"
 
 training:
-  train_dataset_path: "data/training_pairs.jsonl"
+  full_dataset_path: "data/training_pairs.jsonl"
+  train_dataset_path: "data/train_pairs.jsonl"
+  validation_dataset_path: "data/val_pairs.jsonl"
+  test_dataset_path: "data/test_pairs.jsonl"
   output_dir: "models/ecommerce-semantic-model"
   epochs: 1
   batch_size: 16
@@ -23,6 +26,16 @@ training:
   evaluation_steps: 100
   save_steps: 100
   random_seed: 42
+
+dataset_split:
+  train_ratio: 0.8
+  validation_ratio: 0.1
+  test_ratio: 0.1
+  group_by:
+    - source_table
+    - source_id
+  shuffle: true
+  output_dir: "data"
 
 loss:
   name: "MultipleNegativesRankingLoss"
