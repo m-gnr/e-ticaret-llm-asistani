@@ -1,0 +1,5 @@
+split,evaluation_mode,limit,total_records,evaluated_records,skipped_records,top_1_correct,top_k_correct,top_1_accuracy,top_k_accuracy,mrr
+test,exact_id,5,1623,168,1455,154,168,0.9167,1.0000,0.9568
+test,metadata,5,1623,1264,359,1253,1253,0.9913,0.9913,0.9913
+validation,exact_id,5,1582,179,1403,158,169,0.8827,0.9441,0.9089
+validation,metadata,5,1582,1199,383,1191,1191,0.9933,0.9933,0.9933

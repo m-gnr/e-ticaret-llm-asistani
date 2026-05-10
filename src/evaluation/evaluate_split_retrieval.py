@@ -1,4 +1,5 @@
 import argparse
+import csv
 import json
 import random
 from collections import Counter
@@ -7,7 +8,8 @@ from pathlib import Path
 from typing import Any
 
 from src.config_loader import get_project_root, load_yaml_config
-from src.search.semantic_search import semantic_search
+from src.search.query_parser import ParsedQuery, parse_query
+from src.search.semantic_search import expand_category_values, semantic_search
 
 
 @dataclass
@@ -18,11 +20,13 @@ class SplitRetrievalCase:
     title: str | None = None
     query_type: str = "unknown"
     evaluation_mode: str = "exact_id"
+    expected_metadata: dict[str, Any] | None = None
 
 
 @dataclass
 class SplitEvaluationResult:
     split_name: str
+    evaluation_mode: str
     dataset_path: str
     total: int
     total_records: int
@@ -42,6 +46,7 @@ class SplitEvaluationResult:
     reciprocal_rank_sum: float
     limit: int
     failures: list[dict[str, Any]]
+    case_results: list[dict[str, Any]]
 
     @property
     def top_1_accuracy(self) -> float:
@@ -69,6 +74,8 @@ DEFAULT_EVALUATION_CONFIG = {
     "random_sample": False,
     "seed": 42,
     "max_failures": 20,
+    "save_results": True,
+    "output_dir": "reports/evaluation",
 }
 
 
@@ -178,6 +185,60 @@ def get_expected_source(record: dict[str, Any]) -> tuple[str | None, str | None,
     )
 
 
+def build_expected_metadata_from_parsed_query(
+    parsed_query: ParsedQuery,
+    fallback_source_table: str,
+) -> dict[str, Any]:
+    expected: dict[str, Any] = {
+        "source_table": (
+            parsed_query.source_tables[0]
+            if parsed_query.source_tables
+            else fallback_source_table
+        ),
+    }
+
+    if parsed_query.brand is not None:
+        expected["brand"] = parsed_query.brand
+    if parsed_query.category is not None:
+        expected["category"] = parsed_query.category
+    if parsed_query.min_price is not None:
+        expected["min_price"] = parsed_query.min_price
+    if parsed_query.max_price is not None:
+        expected["max_price"] = parsed_query.max_price
+    if parsed_query.in_stock_only:
+        expected["in_stock"] = True
+    if parsed_query.out_of_stock_only:
+        expected["out_of_stock"] = True
+    if parsed_query.min_rating is not None:
+        expected["min_rating"] = parsed_query.min_rating
+    if parsed_query.max_rating is not None:
+        expected["max_rating"] = parsed_query.max_rating
+    if parsed_query.rating_equals is not None:
+        expected["rating_equals"] = parsed_query.rating_equals
+    if parsed_query.status is not None:
+        expected["status"] = parsed_query.status
+    if expected["source_table"] == "urun_varyantlari" and parsed_query.attribute_filters:
+        expected["attributes"] = parsed_query.attribute_filters
+
+    return expected
+
+
+def get_expected_metadata(
+    record: dict[str, Any],
+    query: str,
+    fallback_source_table: str,
+) -> dict[str, Any] | None:
+    expected_metadata = record.get("expected_metadata")
+    if isinstance(expected_metadata, dict):
+        return expected_metadata
+
+    if record.get("evaluation_mode") != "metadata":
+        return None
+
+    parsed_query = parse_query(query)
+    return build_expected_metadata_from_parsed_query(parsed_query, fallback_source_table)
+
+
 def build_cases(records: list[dict[str, Any]], dataset_path: str) -> list[SplitRetrievalCase]:
     """
     JSONL kayıtlarını evaluation case formatına dönüştürür.
@@ -189,6 +250,11 @@ def build_cases(records: list[dict[str, Any]], dataset_path: str) -> list[SplitR
         source_table, source_id, title = get_expected_source(record)
         query_type = record.get("query_type", "unknown")
         evaluation_mode = record.get("evaluation_mode", "exact_id")
+        expected_metadata = (
+            get_expected_metadata(record, str(query), str(source_table))
+            if query and source_table
+            else None
+        )
 
         if "query_type" not in record or "evaluation_mode" not in record:
             print(
@@ -216,6 +282,7 @@ def build_cases(records: list[dict[str, Any]], dataset_path: str) -> list[SplitR
                 title=title,
                 query_type=str(query_type),
                 evaluation_mode=str(evaluation_mode),
+                expected_metadata=expected_metadata,
             )
         )
 
@@ -324,7 +391,156 @@ def result_matches_expected(
     )
 
 
-def evaluate_case(test_case: SplitRetrievalCase, limit: int) -> dict[str, Any]:
+ATTRIBUTE_KEY_ALIASES = {
+    "renk": ["renk"],
+    "beden": ["beden"],
+    "numara": ["numara"],
+    "ram": ["ram"],
+    "depolama": ["depolama"],
+    "kapasite": ["kapasite"],
+    "oyuncu": ["oyuncu"],
+    "baglanti": ["baglanti", "bağlantı"],
+    "yenileme_hizi": ["yenileme_hizi"],
+    "ekran_boyutu": ["ekran_boyutu", "boyut", "ekran"],
+    "kumas": ["kumas", "kumaş"],
+}
+
+
+def normalize_value(value: Any) -> str:
+    if value is None:
+        return ""
+
+    return str(value).strip().lower().replace(" ", "")
+
+
+def values_match(actual: Any, expected: Any) -> bool:
+    if isinstance(expected, bool):
+        if isinstance(actual, bool):
+            return actual == expected
+        return normalize_value(actual) == ("true" if expected else "false")
+
+    return normalize_value(actual) == normalize_value(expected)
+
+
+def get_metadata_categories(metadata: dict[str, Any]) -> list[str]:
+    categories: list[str] = []
+
+    for key in ["kategori", "ust_kategori"]:
+        value = metadata.get(key)
+        if value:
+            categories.append(str(value))
+
+    for key in ["kategoriler", "ust_kategoriler"]:
+        value = metadata.get(key)
+        if isinstance(value, list):
+            categories.extend(str(item) for item in value if item)
+        elif value:
+            categories.append(str(value))
+
+    return categories
+
+
+def result_matches_expected_metadata(
+    result: dict[str, Any],
+    expected_metadata: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    metadata = result.get("metadata") or {}
+    reasons: list[str] = []
+
+    expected_table = expected_metadata.get("source_table")
+    if expected_table and result.get("kaynak_tablo") != expected_table:
+        reasons.append(
+            f"beklenen tablo {expected_table}, gelen {result.get('kaynak_tablo')}"
+        )
+
+    expected_brand = expected_metadata.get("brand")
+    if expected_brand and not values_match(metadata.get("marka"), expected_brand):
+        reasons.append(
+            f"beklenen marka {expected_brand}, gelen {metadata.get('marka')}"
+        )
+
+    expected_category = expected_metadata.get("category")
+    if expected_category:
+        expected_categories = {
+            normalize_value(category)
+            for category in expand_category_values(str(expected_category))
+        }
+        actual_categories = {
+            normalize_value(category)
+            for category in get_metadata_categories(metadata)
+        }
+        if not expected_categories.intersection(actual_categories):
+            reasons.append(
+                f"beklenen kategori {expected_category}, gelen {get_metadata_categories(metadata)}"
+            )
+
+    price_value = metadata.get("satis_fiyati")
+    if expected_metadata.get("min_price") is not None:
+        min_price = float(expected_metadata["min_price"])
+        if price_value is None or float(price_value) < min_price:
+            reasons.append(f"beklenen fiyat >= {min_price}, gelen {price_value}")
+
+    if expected_metadata.get("max_price") is not None:
+        max_price = float(expected_metadata["max_price"])
+        if price_value is None or float(price_value) > max_price:
+            reasons.append(f"beklenen fiyat <= {max_price}, gelen {price_value}")
+
+    stock_value = metadata.get("stok")
+    if expected_metadata.get("in_stock") is True:
+        if stock_value is None or int(stock_value) <= 0:
+            reasons.append(f"beklenen stok > 0, gelen {stock_value}")
+
+    if expected_metadata.get("out_of_stock") is True:
+        if stock_value is None or int(stock_value) != 0:
+            reasons.append(f"beklenen stok = 0, gelen {stock_value}")
+
+    rating_value = metadata.get("puan")
+    if expected_metadata.get("rating_equals") is not None:
+        expected_rating = int(expected_metadata["rating_equals"])
+        if rating_value is None or int(rating_value) != expected_rating:
+            reasons.append(f"beklenen puan = {expected_rating}, gelen {rating_value}")
+
+    if expected_metadata.get("min_rating") is not None:
+        min_rating = int(expected_metadata["min_rating"])
+        if rating_value is None or int(rating_value) < min_rating:
+            reasons.append(f"beklenen puan >= {min_rating}, gelen {rating_value}")
+
+    if expected_metadata.get("max_rating") is not None:
+        max_rating = int(expected_metadata["max_rating"])
+        if rating_value is None or int(rating_value) > max_rating:
+            reasons.append(f"beklenen puan <= {max_rating}, gelen {rating_value}")
+
+    expected_status = expected_metadata.get("status")
+    if expected_status and not values_match(metadata.get("durum"), expected_status):
+        reasons.append(
+            f"beklenen durum {expected_status}, gelen {metadata.get('durum')}"
+        )
+
+    attributes = expected_metadata.get("attributes") or {}
+    result_attributes = metadata.get("ozellikler") or {}
+    for key, expected_value in attributes.items():
+        aliases = ATTRIBUTE_KEY_ALIASES.get(key, [key])
+        actual_value = next(
+            (
+                result_attributes.get(alias)
+                for alias in aliases
+                if alias in result_attributes
+            ),
+            None,
+        )
+        if not values_match(actual_value, expected_value):
+            reasons.append(
+                f"beklenen {key}={expected_value}, gelen {actual_value}"
+            )
+
+    return len(reasons) == 0, reasons
+
+
+def evaluate_case(
+    test_case: SplitRetrievalCase,
+    limit: int,
+    evaluation_mode: str,
+) -> dict[str, Any]:
     """
     Tek query için Top-1 ve Top-K eşleşmesini hesaplar.
     """
@@ -333,19 +549,34 @@ def evaluate_case(test_case: SplitRetrievalCase, limit: int) -> dict[str, Any]:
     top_1_match = False
     top_k_match = False
     expected_rank: int | None = None
+    mismatch_reasons: list[str] = []
+
+    expected_metadata = test_case.expected_metadata or {}
 
     if results:
-        top_1_match = result_matches_expected(
-            results[0],
-            test_case.expected_table,
-            test_case.expected_source_id,
-        )
-        for index, result in enumerate(results, start=1):
-            if result_matches_expected(
-                result,
+        if evaluation_mode == "metadata":
+            top_1_match, mismatch_reasons = result_matches_expected_metadata(
+                results[0],
+                expected_metadata,
+            )
+        else:
+            top_1_match = result_matches_expected(
+                results[0],
                 test_case.expected_table,
                 test_case.expected_source_id,
-            ):
+            )
+
+        for index, result in enumerate(results, start=1):
+            if evaluation_mode == "metadata":
+                is_match, _ = result_matches_expected_metadata(result, expected_metadata)
+            else:
+                is_match = result_matches_expected(
+                    result,
+                    test_case.expected_table,
+                    test_case.expected_source_id,
+                )
+
+            if is_match:
                 expected_rank = index
                 break
 
@@ -356,6 +587,7 @@ def evaluate_case(test_case: SplitRetrievalCase, limit: int) -> dict[str, Any]:
         "expected_table": test_case.expected_table,
         "expected_source_id": test_case.expected_source_id,
         "expected_title": test_case.title,
+        "expected_metadata": expected_metadata,
         "top_1_match": top_1_match,
         "top_k_match": top_k_match,
         "expected_rank": expected_rank,
@@ -365,6 +597,9 @@ def evaluate_case(test_case: SplitRetrievalCase, limit: int) -> dict[str, Any]:
         "top_1_source_id": str(results[0]["kaynak_id"]) if results else None,
         "top_1_title": results[0]["baslik"] if results else None,
         "top_1_score": results[0]["similarity_score"] if results else None,
+        "top_1_metadata": results[0]["metadata"] if results else None,
+        "used_fallback": results[0].get("used_fallback") if results else None,
+        "mismatch_reasons": mismatch_reasons,
     }
 
 
@@ -424,10 +659,16 @@ def evaluate_split(
     top_k_correct = 0
     reciprocal_rank_sum = 0.0
     failures: list[dict[str, Any]] = []
+    case_results: list[dict[str, Any]] = []
     source_table_metrics: dict[str, dict[str, Any]] = {}
 
     for index, test_case in enumerate(cases, start=1):
-        case_result = evaluate_case(test_case, limit=limit)
+        case_result = evaluate_case(
+            test_case,
+            limit=limit,
+            evaluation_mode=evaluation_mode,
+        )
+        case_results.append(case_result)
         table_metrics = source_table_metrics.setdefault(
             test_case.expected_table,
             {
@@ -456,6 +697,7 @@ def evaluate_split(
 
     result = SplitEvaluationResult(
         split_name=split_name,
+        evaluation_mode=evaluation_mode,
         dataset_path=dataset_path,
         total=len(cases),
         total_records=len(all_cases),
@@ -475,6 +717,7 @@ def evaluate_split(
         reciprocal_rank_sum=reciprocal_rank_sum,
         limit=limit,
         failures=failures,
+        case_results=case_results,
     )
 
     print_split_summary(result)
@@ -505,6 +748,15 @@ def print_split_summary(result: SplitEvaluationResult) -> None:
         print(f"Top-1 başlık   : {failure['top_1_title']}")
         score = failure["top_1_score"]
         print(f"Top-1 skor     : {score:.4f}" if score is not None else "Top-1 skor     : Yok")
+        if failure.get("expected_metadata"):
+            print(
+                "Beklenen metadata: "
+                + json.dumps(failure["expected_metadata"], ensure_ascii=False)
+            )
+        if failure.get("mismatch_reasons"):
+            print("Uyuşmayan alanlar:")
+            for reason in failure["mismatch_reasons"]:
+                print(f"- {reason}")
 
 
 def evaluate_configured_splits(
@@ -518,6 +770,8 @@ def evaluate_configured_splits(
     source_tables: list[str] | None = None,
     random_sample: bool = False,
     seed: int = 42,
+    save_results: bool = False,
+    output_dir: str = "reports/evaluation",
 ) -> list[SplitEvaluationResult]:
     """
     Config'teki validation/test splitleri için evaluation çalıştırır.
@@ -556,6 +810,9 @@ def evaluate_configured_splits(
 
     if len(results) > 1:
         print_overall_summary(results)
+
+    if save_results:
+        save_evaluation_results(results, output_dir)
 
     return results
 
@@ -601,6 +858,127 @@ def print_overall_summary(results: list[SplitEvaluationResult]) -> None:
             target["reciprocal_rank_sum"] += metrics["reciprocal_rank_sum"]
 
     print_source_table_summary(combined_metrics, limit)
+
+
+def build_source_table_summary(
+    source_table_metrics: dict[str, dict[str, Any]],
+    limit: int,
+) -> dict[str, dict[str, Any]]:
+    summary: dict[str, dict[str, Any]] = {}
+
+    for table, metrics in sorted(source_table_metrics.items()):
+        total = metrics["total"]
+        top_1_correct = metrics["top_1_correct"]
+        top_k_correct = metrics["top_k_correct"]
+        reciprocal_rank_sum = metrics["reciprocal_rank_sum"]
+
+        summary[table] = {
+            "total": total,
+            "top_1_correct": top_1_correct,
+            f"top_{limit}_correct": top_k_correct,
+            "top_1_accuracy": top_1_correct / total if total else 0.0,
+            f"top_{limit}_accuracy": top_k_correct / total if total else 0.0,
+            "mrr": reciprocal_rank_sum / total if total else 0.0,
+        }
+
+    return summary
+
+
+def build_summary_payload(result: SplitEvaluationResult) -> dict[str, Any]:
+    return {
+        "split": result.split_name,
+        "evaluation_mode": result.evaluation_mode,
+        "limit": result.limit,
+        "total_records": result.total_records,
+        "evaluated_records": result.total,
+        "eligible_records": result.total_eligible,
+        "skipped_records": result.skipped_records,
+        "sample_size": result.sample_size,
+        "top_1_correct": result.top_1_correct,
+        "top_k_correct": result.top_k_correct,
+        "top_1_accuracy": result.top_1_accuracy,
+        "top_k_accuracy": result.top_k_accuracy,
+        "mrr": result.mrr,
+        "source_table_summary": build_source_table_summary(
+            result.source_table_metrics,
+            result.limit,
+        ),
+        "query_type_counts": result.query_type_counts,
+        "evaluation_mode_counts": result.evaluation_mode_counts,
+        "source_table_counts": result.source_table_counts,
+        "filtered_source_table_counts": result.filtered_source_table_counts,
+        "skipped_by_query_type": result.skipped_by_query_type,
+        "skipped_by_evaluation_mode": result.skipped_by_evaluation_mode,
+        "skipped_by_source_table": result.skipped_by_source_table,
+    }
+
+
+def save_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as file:
+        json.dump(payload, file, ensure_ascii=False, indent=2, default=str)
+
+
+def save_evaluation_results(
+    results: list[SplitEvaluationResult],
+    output_dir: str,
+) -> None:
+    output_path = get_project_root() / output_dir
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    for result in results:
+        filename_prefix = f"{result.split_name}_{result.evaluation_mode}"
+        summary_payload = build_summary_payload(result)
+        save_json(
+            output_path / f"{filename_prefix}_summary.json",
+            summary_payload,
+        )
+        save_json(
+            output_path / f"{filename_prefix}_results.json",
+            result.case_results,
+        )
+
+    csv_rows: list[dict[str, Any]] = []
+    for summary_file in sorted(output_path.glob("*_summary.json")):
+        with summary_file.open("r", encoding="utf-8") as file:
+            summary = json.load(file)
+
+        csv_rows.append(
+            {
+                "split": summary.get("split"),
+                "evaluation_mode": summary.get("evaluation_mode"),
+                "limit": summary.get("limit"),
+                "total_records": summary.get("total_records"),
+                "evaluated_records": summary.get("evaluated_records"),
+                "skipped_records": summary.get("skipped_records"),
+                "top_1_correct": summary.get("top_1_correct"),
+                "top_k_correct": summary.get("top_k_correct"),
+                "top_1_accuracy": f"{float(summary.get('top_1_accuracy', 0.0)):.4f}",
+                "top_k_accuracy": f"{float(summary.get('top_k_accuracy', 0.0)):.4f}",
+                "mrr": f"{float(summary.get('mrr', 0.0)):.4f}",
+            }
+        )
+
+    csv_path = output_path / "evaluation_summary.csv"
+    fieldnames = [
+        "split",
+        "evaluation_mode",
+        "limit",
+        "total_records",
+        "evaluated_records",
+        "skipped_records",
+        "top_1_correct",
+        "top_k_correct",
+        "top_1_accuracy",
+        "top_k_accuracy",
+        "mrr",
+    ]
+    with csv_path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(csv_rows)
+
+    print(f"\nEvaluation raporları kaydedildi: {output_path}")
 
 
 def format_counts(counts: dict[str, int]) -> str:
@@ -705,6 +1083,25 @@ def parse_args() -> argparse.Namespace:
         default=int(evaluation_config.get("seed", 42)),
         help="Random sample seed değeri.",
     )
+    save_group = parser.add_mutually_exclusive_group()
+    save_group.add_argument(
+        "--save-results",
+        dest="save_results",
+        action="store_true",
+        default=bool(evaluation_config.get("save_results", True)),
+        help="Evaluation sonuçlarını JSON/CSV olarak kaydeder.",
+    )
+    save_group.add_argument(
+        "--no-save-results",
+        dest="save_results",
+        action="store_false",
+        help="Evaluation sonuçlarını dosyaya kaydetmez.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=evaluation_config.get("output_dir", "reports/evaluation"),
+        help="Evaluation raporlarının yazılacağı klasör.",
+    )
     return parser.parse_args()
 
 
@@ -712,8 +1109,20 @@ if __name__ == "__main__":
     args = parse_args()
     config_query_types = get_split_retrieval_config().get("default_query_types", [])
     config_source_tables = get_split_retrieval_config().get("default_source_tables", [])
-    query_types = args.query_type or list(config_query_types)
-    source_tables = args.source_table or list(config_source_tables)
+    if args.query_type is not None:
+        query_types = args.query_type
+    elif args.evaluation_mode == "metadata":
+        query_types = None
+    else:
+        query_types = list(config_query_types)
+
+    if args.source_table is not None:
+        source_tables = args.source_table
+    elif args.evaluation_mode == "metadata":
+        source_tables = None
+    else:
+        source_tables = list(config_source_tables)
+
     evaluate_configured_splits(
         split=args.split,
         limit=args.limit,
@@ -725,4 +1134,6 @@ if __name__ == "__main__":
         source_tables=source_tables,
         random_sample=args.random_sample,
         seed=args.seed,
+        save_results=args.save_results,
+        output_dir=args.output_dir,
     )

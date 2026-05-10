@@ -1,0 +1,72 @@
+{
+  "split": "test",
+  "evaluation_mode": "metadata",
+  "limit": 5,
+  "total_records": 1623,
+  "evaluated_records": 1264,
+  "eligible_records": 1264,
+  "skipped_records": 359,
+  "sample_size": null,
+  "top_1_correct": 1253,
+  "top_k_correct": 1253,
+  "top_1_accuracy": 0.9912974683544303,
+  "top_k_accuracy": 0.9912974683544303,
+  "mrr": 0.9912974683544303,
+  "source_table_summary": {
+    "kuponlar": {
+      "total": 2,
+      "top_1_correct": 2,
+      "top_5_correct": 2,
+      "top_1_accuracy": 1.0,
+      "top_5_accuracy": 1.0,
+      "mrr": 1.0
+    },
+    "urun_varyantlari": {
+      "total": 252,
+      "top_1_correct": 252,
+      "top_5_correct": 252,
+      "top_1_accuracy": 1.0,
+      "top_5_accuracy": 1.0,
+      "mrr": 1.0
+    },
+    "urun_yorumlari": {
+      "total": 1010,
+      "top_1_correct": 999,
+      "top_5_correct": 999,
+      "top_1_accuracy": 0.9891089108910891,
+      "top_5_accuracy": 0.9891089108910891,
+      "mrr": 0.9891089108910891
+    }
+  },
+  "query_type_counts": {
+    "attribute": 1264,
+    "specific": 156,
+    "generic": 191,
+    "navigational": 12
+  },
+  "evaluation_mode_counts": {
+    "metadata": 1264,
+    "exact_id": 168,
+    "skip": 191
+  },
+  "source_table_counts": {
+    "urun_yorumlari": 1010,
+    "urun_varyantlari": 564,
+    "kategoriler": 12,
+    "musteriler": 12,
+    "markalar": 9,
+    "siparisler": 4,
+    "kuponlar": 12
+  },
+  "filtered_source_table_counts": {
+    "urun_yorumlari": 1010,
+    "urun_varyantlari": 252,
+    "kuponlar": 2
+  },
+  "skipped_by_query_type": {},
+  "skipped_by_evaluation_mode": {
+    "exact_id": 168,
+    "skip": 191
+  },
+  "skipped_by_source_table": {}
+}

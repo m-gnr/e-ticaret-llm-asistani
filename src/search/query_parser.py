@@ -699,6 +699,77 @@ def extract_coupon_code(text: str) -> str | None:
     return None
 
 
+def has_cargo_context(text: str) -> bool:
+    cargo_keywords = [
+        "kargo",
+        "kargolar",
+        "takip",
+        "takibi",
+        "teslimat",
+        "teslim",
+        "teslim edildi",
+        "dağıtım",
+        "dagitim",
+    ]
+    return any(keyword in text for keyword in cargo_keywords)
+
+
+def has_return_context(text: str) -> bool:
+    return_keywords = [
+        "iade",
+        "iadeler",
+        "iade kaydı",
+        "iade kaydi",
+        "geri gönder",
+        "geri gonder",
+        "hasarlı",
+        "hasarli",
+        "kusurlu",
+    ]
+    return any(keyword in text for keyword in return_keywords)
+
+
+def has_order_context(text: str) -> bool:
+    order_keywords = [
+        "sipariş",
+        "siparis",
+        "sipariş durumu",
+        "siparis durumu",
+        "numaralı sipariş",
+        "numarali siparis",
+        "sipariş no",
+        "siparis no",
+    ]
+    return any(keyword in text for keyword in order_keywords)
+
+
+def resolve_identifier_intent(
+    text: str,
+    order_no: str | None,
+    tracking_no: str | None,
+    coupon_code: str | None,
+) -> str | None:
+    if coupon_code is not None:
+        return "coupon"
+
+    if tracking_no is not None:
+        return "cargo"
+
+    if order_no is None:
+        return None
+
+    if has_cargo_context(text):
+        return "cargo"
+
+    if has_return_context(text):
+        return "return"
+
+    if has_order_context(text):
+        return "order"
+
+    return "order"
+
+
 def detect_intent(text: str) -> str | None:
     for intent, keywords in INTENT_KEYWORDS.items():
         if any(keyword in text for keyword in keywords):
@@ -810,13 +881,13 @@ def parse_query(query: str) -> ParsedQuery:
 
     attribute_filters = extract_attribute_filters(normalized)
     search_text = clean_search_text(normalized)
-    if coupon_code is not None:
-        intent = "coupon"
-    elif tracking_no is not None:
-        intent = "cargo"
-    elif order_no is not None:
-        intent = "order"
-    else:
+    intent = resolve_identifier_intent(
+        text=normalized,
+        order_no=order_no,
+        tracking_no=tracking_no,
+        coupon_code=coupon_code,
+    )
+    if intent is None:
         intent = detect_intent(normalized)
 
     if intent is None and (category or brand or model_filter or attribute_filters):
@@ -828,7 +899,12 @@ def parse_query(query: str) -> ParsedQuery:
     elif tracking_no is not None:
         source_tables = ["kargolar"]
     elif order_no is not None:
-        source_tables = ["siparisler"]
+        if intent == "cargo":
+            source_tables = ["kargolar"]
+        elif intent == "return":
+            source_tables = ["iadeler"]
+        else:
+            source_tables = ["siparisler"]
 
     sort_by, sort_direction = detect_sort_intent(normalized)
 
@@ -933,6 +1009,12 @@ def run_demo() -> None:
         "Samsung marka telefonları göster",
         "stokta olmayan ürünleri listele",
         "en az 4 puan alan ayakkabı yorumları",
+        "SIP-2026-0002 kargo durumu",
+        "SIP-2026-0002 kargo takibi",
+        "SIP-2026-0008 iade kaydı",
+        "SIP-2026-0007 numaralı sipariş",
+        "KARGO0 kuponu",
+        "AR000002 takip numaralı kargo",
     ]
 
     for query in test_queries:

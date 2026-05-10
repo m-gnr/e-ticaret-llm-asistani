@@ -4,6 +4,7 @@ from typing import Any
 
 from src.config_loader import get_project_root, load_yaml_config
 from src.database.db import get_db_connection
+from src.search.query_parser import ParsedQuery, parse_query
 
 
 def get_training_config() -> dict[str, Any]:
@@ -63,6 +64,44 @@ def build_expected_exact(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_expected_metadata(
+    record: dict[str, Any],
+    parsed_query: ParsedQuery,
+) -> dict[str, Any]:
+    expected: dict[str, Any] = {
+        "source_table": (
+            parsed_query.source_tables[0]
+            if parsed_query.source_tables
+            else record["source_table"]
+        ),
+    }
+
+    if parsed_query.brand is not None:
+        expected["brand"] = parsed_query.brand
+    if parsed_query.category is not None:
+        expected["category"] = parsed_query.category
+    if parsed_query.min_price is not None:
+        expected["min_price"] = parsed_query.min_price
+    if parsed_query.max_price is not None:
+        expected["max_price"] = parsed_query.max_price
+    if parsed_query.in_stock_only:
+        expected["in_stock"] = True
+    if parsed_query.out_of_stock_only:
+        expected["out_of_stock"] = True
+    if parsed_query.min_rating is not None:
+        expected["min_rating"] = parsed_query.min_rating
+    if parsed_query.max_rating is not None:
+        expected["max_rating"] = parsed_query.max_rating
+    if parsed_query.rating_equals is not None:
+        expected["rating_equals"] = parsed_query.rating_equals
+    if parsed_query.status is not None:
+        expected["status"] = parsed_query.status
+    if expected["source_table"] == "urun_varyantlari" and parsed_query.attribute_filters:
+        expected["attributes"] = parsed_query.attribute_filters
+
+    return expected
+
+
 def make_query_spec(
     query: str,
     query_type: str,
@@ -81,7 +120,8 @@ def make_pair(
     query_type: str,
     evaluation_mode: str = "exact_id",
 ) -> dict[str, Any]:
-    return {
+    parsed_query = parse_query(query)
+    pair = {
         "query": query,
         "positive_text": record["content"],
         "source_table": record["source_table"],
@@ -91,6 +131,11 @@ def make_pair(
         "evaluation_mode": evaluation_mode,
         "expected": build_expected_exact(record),
     }
+
+    if evaluation_mode == "metadata":
+        pair["expected_metadata"] = build_expected_metadata(record, parsed_query)
+
+    return pair
 
 
 def build_product_queries(record: dict[str, Any]) -> list[dict[str, str]]:

@@ -1,0 +1,101 @@
+{
+  "split": "validation",
+  "evaluation_mode": "exact_id",
+  "limit": 5,
+  "total_records": 1582,
+  "evaluated_records": 179,
+  "eligible_records": 179,
+  "skipped_records": 1403,
+  "sample_size": null,
+  "top_1_correct": 158,
+  "top_k_correct": 169,
+  "top_1_accuracy": 0.88268156424581,
+  "top_k_accuracy": 0.9441340782122905,
+  "mrr": 0.9089385474860334,
+  "source_table_summary": {
+    "iadeler": {
+      "total": 1,
+      "top_1_correct": 1,
+      "top_5_correct": 1,
+      "top_1_accuracy": 1.0,
+      "top_5_accuracy": 1.0,
+      "mrr": 1.0
+    },
+    "kargolar": {
+      "total": 6,
+      "top_1_correct": 5,
+      "top_5_correct": 6,
+      "top_1_accuracy": 0.8333333333333334,
+      "top_5_accuracy": 1.0,
+      "mrr": 0.875
+    },
+    "kuponlar": {
+      "total": 2,
+      "top_1_correct": 2,
+      "top_5_correct": 2,
+      "top_1_accuracy": 1.0,
+      "top_5_accuracy": 1.0,
+      "mrr": 1.0
+    },
+    "musteriler": {
+      "total": 14,
+      "top_1_correct": 7,
+      "top_5_correct": 10,
+      "top_1_accuracy": 0.5,
+      "top_5_accuracy": 0.7142857142857143,
+      "mrr": 0.5678571428571428
+    },
+    "siparisler": {
+      "total": 6,
+      "top_1_correct": 6,
+      "top_5_correct": 6,
+      "top_1_accuracy": 1.0,
+      "top_5_accuracy": 1.0,
+      "mrr": 1.0
+    },
+    "urun_varyantlari": {
+      "total": 150,
+      "top_1_correct": 137,
+      "top_5_correct": 144,
+      "top_1_accuracy": 0.9133333333333333,
+      "top_5_accuracy": 0.96,
+      "mrr": 0.9366666666666666
+    }
+  },
+  "query_type_counts": {
+    "attribute": 1199,
+    "generic": 204,
+    "navigational": 29,
+    "specific": 150
+  },
+  "evaluation_mode_counts": {
+    "metadata": 1199,
+    "skip": 204,
+    "exact_id": 179
+  },
+  "source_table_counts": {
+    "urun_yorumlari": 950,
+    "markalar": 6,
+    "musteriler": 28,
+    "urun_varyantlari": 548,
+    "kargolar": 10,
+    "kategoriler": 16,
+    "kuponlar": 6,
+    "siparisler": 12,
+    "iadeler": 6
+  },
+  "filtered_source_table_counts": {
+    "musteriler": 14,
+    "urun_varyantlari": 150,
+    "kargolar": 6,
+    "kuponlar": 2,
+    "siparisler": 6,
+    "iadeler": 1
+  },
+  "skipped_by_query_type": {
+    "attribute": 1199,
+    "generic": 204
+  },
+  "skipped_by_evaluation_mode": {},
+  "skipped_by_source_table": {}
+}

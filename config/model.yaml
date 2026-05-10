@@ -54,6 +54,8 @@ evaluation:
     random_sample: false
     seed: 42
     max_failures: 20
+    save_results: true
+    output_dir: "reports/evaluation"
 
 loss:
   name: "MultipleNegativesRankingLoss"
