@@ -2,6 +2,8 @@ import re
 from dataclasses import dataclass, asdict, field
 from typing import Any
 
+from src.config_loader import load_yaml_config
+
 
 @dataclass
 class ParsedQuery:
@@ -28,320 +30,53 @@ class ParsedQuery:
         return asdict(self)
 
 
-INTENT_TABLES = {
-    "product": ["urun_varyantlari"],
-    "review": ["urun_yorumlari"],
-    "return": ["iadeler"],
-    "cargo": ["kargolar"],
-    "order": ["siparisler"],
-    "coupon": ["kuponlar"],
-    "customer": ["musteriler"],
-}
-
-
-INTENT_KEYWORDS = {
-    "return": [
-        "iade",
-        "iadeler",
-        "hasarlı",
-        "kusurlu",
-        "geri gönder",
-        "geri gonder",
-    ],
-    "cargo": [
-        "kargo",
-        "kargolar",
-        "teslimat",
-        "takip",
-        "teslim edilen",
-        "yolda",
-    ],
-    "review": [
-        "yorum",
-        "yorumlar",
-        "puan",
-        "değerlendirme",
-        "degerlendirme",
-        "memnuniyet",
-        "şikayet",
-        "sikayet",
-    ],
-    "order": [
-        "sipariş",
-        "siparis",
-        "siparişler",
-        "siparisler",
-        "sipariş no",
-        "siparis no",
-    ],
-    "coupon": [
-        "kupon",
-        "indirim",
-        "kampanya",
-    ],
-    "customer": [
-        "müşteri",
-        "musteri",
-        "kullanıcı",
-        "kullanici",
-        "adres",
-    ],
-    "product": [
-        "ürün",
-        "urun",
-        "öner",
-        "oner",
-        "göster",
-        "goster",
-        "listele",
-        "tavsiye",
-        "satın al",
-        "satin al",
-        "kulaklık",
-        "kulaklik",
-        "mouse",
-        "klavye",
-        "laptop",
-        "bilgisayar",
-        "tablet",
-        "telefon",
-        "iphone",
-        "samsung",
-        "galaxy",
-        "xiaomi",
-        "redmi",
-        "poco",
-        "oppo",
-        "vivo",
-        "realme",
-        "honor",
-        "macbook",
-        "notebook",
-        "ultrabook",
-        "thinkpad",
-        "ideapad",
-        "vivobook",
-        "zenbook",
-        "victus",
-        "nitro",
-        "monster",
-        "msi",
-        "monitör",
-        "monitor",
-        "powerbank",
-        "sweatshirt",
-        "sweat",
-        "gömlek",
-        "gomlek",
-        "pantolon",
-        "jean",
-        "chino",
-        "mont",
-        "parka",
-        "bot",
-        "sneaker",
-        "airpods",
-        "buds",
-        "ayakkabı",
-        "ayakkabi",
-        "tişört",
-        "tisort",
-        "tshirt",
-        "t-shirt",
-    ],
-}
-
-
-CATEGORY_KEYWORDS = {
-    # Daha spesifik kategoriler önce gelmeli
-    "Oyuncu Mouse": ["oyuncu mouse", "gaming mouse"],
-    "Oyuncu Klavyesi": ["oyuncu klavyesi", "gaming klavye", "rgb klavye"],
-    "Oyuncu Kulaklığı": [
-        "oyuncu kulaklığı",
-        "oyuncu kulakligi",
-        "gaming kulaklık",
-        "gaming kulaklik",
-    ],
-
-    "Koşu Ayakkabısı": ["koşu ayakkabısı", "kosu ayakkabisi"],
-    "Spor Ayakkabı": ["spor ayakkabı", "spor ayakkabi"],
-    "Günlük Ayakkabı": ["günlük ayakkabı", "gunluk ayakkabi", "sneaker"],
-    "Bot": ["outdoor bot", "bot"],
-
-    # Genel kategoriler
-    "Kulaklık": [
-        "kulaklık",
-        "kulaklik",
-        "bluetooth kulaklık",
-        "kablosuz kulaklık",
-        "airpods",
-        "buds",
-    ],
-    "Mouse": ["mouse", "fare", "kablosuz mouse"],
-    "Klavye": ["klavye", "keyboard", "kablosuz klavye"],
-    "Laptop": [
-        "laptop",
-        "dizüstü",
-        "dizustu",
-        "notebook",
-        "ultrabook",
-        "macbook",
-        "thinkpad",
-        "ideapad",
-        "vivobook",
-        "zenbook",
-        "victus",
-        "nitro",
-        "monster",
-        "msi",
-    ],
-    "Telefon": [
-        "telefon",
-        "akıllı telefon",
-        "akilli telefon",
-        "iphone",
-        "samsung",
-        "galaxy",
-        "xiaomi",
-        "redmi",
-        "poco",
-        "oppo",
-        "vivo",
-        "realme",
-        "honor",
-    ],
-    "Tablet": ["tablet"],
-    "Monitör": ["monitör", "monitor"],
-    "Şarj Cihazı": [
-        "şarj cihazı",
-        "sarj cihazi",
-        "adaptör",
-        "adapter",
-        "hızlı şarj",
-        "hizli sarj",
-    ],
-    "Powerbank": ["powerbank", "taşınabilir şarj", "tasinabilir sarj"],
-    "Akıllı Saat": ["akıllı saat", "akilli saat", "watch"],
-    "Kahve Makinesi": ["kahve makinesi", "türk kahvesi", "turk kahvesi"],
-    "Süpürge": ["süpürge", "supurge"],
-    "Tişört": ["tişört", "tisort", "tshirt", "t-shirt"],
-    "Gömlek": ["gömlek", "gomlek"],
-    "Pantolon": ["pantolon", "jean", "chino"],
-    "Sweatshirt": ["sweatshirt", "sweat", "kapüşonlu", "kapusonlu"],
-    "Mont": ["şişme mont", "sisme mont", "kışlık mont", "kislik mont", "parka", "mont"],
-    "Ayakkabı": ["ayakkabı", "ayakkabi", "ayakkabılar", "ayakkabilar", "sneaker"],
-}
-
-
-BRAND_ALIASES = {
-    "new balance": "new balance",
-    "lc waikiki": "lc waikiki",
-    "iphone": "apple",
-    "macbook": "apple",
-    "apple": "apple",
-    "samsung": "samsung",
-    "galaxy": "samsung",
-    "redmi": "xiaomi",
-    "xiaomi": "xiaomi",
-    "poco": "poco",
-    "oppo": "oppo",
-    "vivo": "vivo",
-    "realme": "realme",
-    "honor": "honor",
-    "sony": "sony",
-    "jbl": "jbl",
-    "razer": "razer",
-    "logitech": "logitech",
-    "philips": "philips",
-    "arzum": "arzum",
-    "monster": "monster",
-    "thinkpad": "lenovo",
-    "ideapad": "lenovo",
-    "lenovo": "lenovo",
-    "vivobook": "asus",
-    "zenbook": "asus",
-    "tuf": "asus",
-    "asus": "asus",
-    "victus": "hp",
-    "hp": "hp",
-    "xps": "dell",
-    "dell": "dell",
-    "nitro": "acer",
-    "acer": "acer",
-    "msi": "msi",
-    "anker": "anker",
-    "huawei": "huawei",
-    "kingston": "kingston",
-    "corsair": "corsair",
-    "dyson": "dyson",
-    "nike": "nike",
-    "adidas": "adidas",
-    "puma": "puma",
-    "levi's": "levi's",
-    "levis": "levi's",
-    "skechers": "skechers",
-    "converse": "converse",
-    "columbia": "columbia",
-    "koton": "koton",
-    "mavi": "mavi",
-    "defacto": "defacto",
-}
-
-
-COLOR_VALUES = {
-    "siyah": "Siyah",
-    "beyaz": "Beyaz",
-    "gri": "Gri",
-    "mavi": "Mavi",
-    "lacivert": "Lacivert",
-    "kırmızı": "Kırmızı",
-    "kirmizi": "Kırmızı",
-    "yeşil": "Yeşil",
-    "yesil": "Yeşil",
-    "bordo": "Bordo",
-    "haki": "Haki",
-    "bej": "Bej",
-    "mor": "Mor",
-    "pembe": "Pembe",
-    "altın": "Altın",
-    "altin": "Altın",
-    "sarı": "Sarı",
-    "sari": "Sarı",
-    "kahverengi": "Kahverengi",
-    "gümüş": "Gümüş",
-    "gumus": "Gümüş",
-}
-
-
-PHONE_CONTEXT_KEYWORDS = [
-    "iphone",
-    "samsung",
-    "galaxy",
-    "xiaomi",
-    "redmi",
-    "poco",
-    "oppo",
-    "vivo",
-    "realme",
-    "honor",
-    "telefon",
+REQUIRED_QUERY_PARSER_CONFIG_KEYS = [
+    "intent_tables",
+    "intent_keywords",
+    "category_keywords",
+    "brand_aliases",
+    "color_values",
+    "phone_context_keywords",
+    "laptop_context_keywords",
+    "clothing_context_keywords",
+    "shoe_context_keywords",
+    "status_keywords",
+    "sort_patterns",
 ]
 
 
-LAPTOP_CONTEXT_KEYWORDS = [
-    "laptop",
-    "notebook",
-    "ultrabook",
-    "macbook",
-    "thinkpad",
-    "ideapad",
-    "vivobook",
-    "zenbook",
-    "victus",
-    "nitro",
-    "monster",
-    "msi",
-]
+def validate_query_parser_config(config: dict[str, Any]) -> None:
+    missing_keys = [
+        key for key in REQUIRED_QUERY_PARSER_CONFIG_KEYS
+        if key not in config
+    ]
+
+    if missing_keys:
+        raise KeyError(
+            "Eksik query parser config alanları: "
+            + ", ".join(missing_keys)
+        )
+
+
+def get_query_parser_config() -> dict[str, Any]:
+    config = load_yaml_config("config/query_parser.yaml")
+    validate_query_parser_config(config)
+    return config
+
+
+_QUERY_PARSER_CONFIG = get_query_parser_config()
+
+INTENT_TABLES = _QUERY_PARSER_CONFIG["intent_tables"]
+INTENT_KEYWORDS = _QUERY_PARSER_CONFIG["intent_keywords"]
+CATEGORY_KEYWORDS = _QUERY_PARSER_CONFIG["category_keywords"]
+BRAND_ALIASES = _QUERY_PARSER_CONFIG["brand_aliases"]
+COLOR_VALUES = _QUERY_PARSER_CONFIG["color_values"]
+PHONE_CONTEXT_KEYWORDS = _QUERY_PARSER_CONFIG["phone_context_keywords"]
+LAPTOP_CONTEXT_KEYWORDS = _QUERY_PARSER_CONFIG["laptop_context_keywords"]
+CLOTHING_CONTEXT_KEYWORDS = _QUERY_PARSER_CONFIG["clothing_context_keywords"]
+SHOE_CONTEXT_KEYWORDS = _QUERY_PARSER_CONFIG["shoe_context_keywords"]
+STATUS_KEYWORDS = _QUERY_PARSER_CONFIG["status_keywords"]
+SORT_PATTERNS = _QUERY_PARSER_CONFIG["sort_patterns"]
 
 
 MODEL_PATTERNS = [
@@ -457,61 +192,8 @@ ATTRIBUTE_PATTERNS = [
             "pamuk": "Pamuk",
             "denim": "Denim",
         },
-        "context_keywords": [
-            "tişört",
-            "tisort",
-            "tshirt",
-            "t-shirt",
-            "gömlek",
-            "gomlek",
-            "sweatshirt",
-            "pantolon",
-        ],
+        "context_keywords": CLOTHING_CONTEXT_KEYWORDS,
     },
-]
-
-
-CLOTHING_CONTEXT_KEYWORDS = [
-    "tişört",
-    "tisort",
-    "tshirt",
-    "t-shirt",
-    "gömlek",
-    "gomlek",
-    "sweatshirt",
-    "pantolon",
-    "mont",
-]
-
-
-SHOE_CONTEXT_KEYWORDS = [
-    "ayakkabı",
-    "ayakkabi",
-    "ayakkabılar",
-    "ayakkabilar",
-    "sneaker",
-    "bot",
-]
-
-
-STATUS_KEYWORDS = {
-    "teslim_edildi": ["teslim edildi", "teslim edilen", "teslim edilmiş"],
-    "yolda": ["yolda", "kargo yolda", "dağıtımda", "dagitimda"],
-    "hazirlaniyor": ["hazırlanıyor", "hazirlaniyor", "hazırlıkta"],
-    "kargoya_verildi": ["kargoya verildi", "kargoda"],
-    "iptal_edildi": ["iptal", "iptal edildi"],
-    "iade_edildi": ["iade edildi", "iade olan"],
-    "basarili": ["başarılı ödeme", "basarili odeme", "ödendi"],
-    "basarisiz": ["başarısız ödeme", "basarisiz odeme"],
-    "beklemede": ["beklemede", "ödeme beklemede"],
-}
-
-
-SORT_PATTERNS = [
-    ("rating", "asc", ["düşük puanlı", "dusuk puanli", "düşük yıldızlı", "dusuk yildizli", "kötü yorumlar", "kotu yorumlar", "en kötü yorumlar", "en kotu yorumlar", "olumsuz yorumlar", "kötü puanlı", "kotu puanli", "az puanlı", "az puanli"]),
-    ("rating", "desc", ["yüksek puanlı", "yuksek puanli", "iyi yorumlar", "en iyi yorumlar", "olumlu yorumlar", "iyi puanlı", "iyi puanli", "çok beğenilen", "cok begenilen"]),
-    ("price", "desc", ["en pahalı", "pahalı", "yüksek fiyatlı", "yuksek fiyatli", "fiyatı yüksek", "fiyati yuksek"]),
-    ("price", "asc", ["en ucuz", "ucuz", "uygun fiyatlı", "uygun fiyatli", "düşük fiyatlı", "dusuk fiyatli"]),
 ]
 
 
@@ -989,9 +671,9 @@ def detect_status(text: str) -> str | None:
 
 
 def detect_sort_intent(text: str) -> tuple[str | None, str | None]:
-    for sort_by, sort_direction, keywords in SORT_PATTERNS:
-        if any(keyword in text for keyword in keywords):
-            return sort_by, sort_direction
+    for item in SORT_PATTERNS:
+        if any(keyword in text for keyword in item["keywords"]):
+            return item["sort_by"], item["direction"]
 
     return None, None
 
