@@ -140,10 +140,10 @@ TEST_CASES = [
         expected_attribute_filters={"beden": "L", "renk": "Lacivert"},
     ),
     RetrievalTestCase(
-        query="xl beden beyaz tişört",
+        query="xl beden bordo sweatshirt",
         expected_table="urun_varyantlari",
-        expected_category="Tişört",
-        expected_attribute_filters={"beden": "XL", "renk": "Beyaz"},
+        expected_category="Sweatshirt",
+        expected_attribute_filters={"beden": "XL", "renk": "Bordo"},
     ),
     RetrievalTestCase(
         query="kırmızı tişört",

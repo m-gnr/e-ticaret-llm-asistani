@@ -26,3 +26,6 @@ seed_files:
   - "sql/seed/03_seed_urunler.sql"
   - "sql/seed/04_seed_siparisler.sql"
   - "sql/seed/05_seed_yorumlar_iadeler_kuponlar.sql"
+  - "sql/seed/06_extra_products_and_variants.sql"
+  - "sql/seed/07_fix_sku_ascii.sql"
+  - "sql/seed/08_extra_product_reviews.sql"
