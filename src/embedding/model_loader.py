@@ -7,6 +7,9 @@ from sentence_transformers import SentenceTransformer
 from src.config_loader import get_project_root, load_yaml_config
 
 
+_EMBEDDING_MODEL_CACHE: SentenceTransformer | None = None
+
+
 def get_model_config() -> dict:
     """
     config/model.yaml dosyasındaki model ayarlarını okur.
@@ -53,6 +56,11 @@ def load_embedding_model() -> SentenceTransformer:
     1. models/ecommerce-semantic-model gibi fine-tuned model klasörü
     2. config/model.yaml içindeki base_model_name
     """
+    global _EMBEDDING_MODEL_CACHE
+
+    if _EMBEDDING_MODEL_CACHE is not None:
+        return _EMBEDDING_MODEL_CACHE
+
     model_path = resolve_model_path()
     model_config = get_model_config()
     device = model_config.get("device", "auto")
@@ -62,7 +70,16 @@ def load_embedding_model() -> SentenceTransformer:
     else:
         model = SentenceTransformer(model_path, device=device)
 
-    return model
+    _EMBEDDING_MODEL_CACHE = model
+    return _EMBEDDING_MODEL_CACHE
+
+
+def clear_embedding_model_cache() -> None:
+    """
+    Test/debug senaryolarında cache'teki embedding modelini temizler.
+    """
+    global _EMBEDDING_MODEL_CACHE
+    _EMBEDDING_MODEL_CACHE = None
 
 
 def encode_text(model: SentenceTransformer, text: str) -> np.ndarray:

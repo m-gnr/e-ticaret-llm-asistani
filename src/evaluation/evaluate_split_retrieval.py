@@ -21,8 +21,11 @@ class SplitEvaluationResult:
     split_name: str
     dataset_path: str
     total: int
+    total_available: int
+    sample_size: int | None
     top_1_correct: int
     top_k_correct: int
+    reciprocal_rank_sum: float
     limit: int
     failures: list[dict[str, Any]]
 
@@ -33,6 +36,10 @@ class SplitEvaluationResult:
     @property
     def top_k_accuracy(self) -> float:
         return self.top_k_correct / self.total if self.total else 0.0
+
+    @property
+    def mrr(self) -> float:
+        return self.reciprocal_rank_sum / self.total if self.total else 0.0
 
 
 REQUIRED_TRAINING_KEYS = [
@@ -163,6 +170,7 @@ def evaluate_case(test_case: SplitRetrievalCase, limit: int) -> dict[str, Any]:
 
     top_1_match = False
     top_k_match = False
+    expected_rank: int | None = None
 
     if results:
         top_1_match = result_matches_expected(
@@ -170,14 +178,16 @@ def evaluate_case(test_case: SplitRetrievalCase, limit: int) -> dict[str, Any]:
             test_case.expected_table,
             test_case.expected_source_id,
         )
-        top_k_match = any(
-            result_matches_expected(
+        for index, result in enumerate(results, start=1):
+            if result_matches_expected(
                 result,
                 test_case.expected_table,
                 test_case.expected_source_id,
-            )
-            for result in results
-        )
+            ):
+                expected_rank = index
+                break
+
+        top_k_match = expected_rank is not None
 
     return {
         "query": test_case.query,
@@ -186,6 +196,8 @@ def evaluate_case(test_case: SplitRetrievalCase, limit: int) -> dict[str, Any]:
         "expected_title": test_case.title,
         "top_1_match": top_1_match,
         "top_k_match": top_k_match,
+        "expected_rank": expected_rank,
+        "reciprocal_rank": 1 / expected_rank if expected_rank is not None else 0.0,
         "result_count": len(results),
         "top_1_table": results[0]["kaynak_tablo"] if results else None,
         "top_1_source_id": str(results[0]["kaynak_id"]) if results else None,
@@ -199,22 +211,34 @@ def evaluate_split(
     dataset_path: str,
     limit: int = 5,
     max_failures: int = 10,
+    sample_size: int | None = None,
 ) -> SplitEvaluationResult:
     """
     Belirli bir split dosyası için retrieval evaluation çalıştırır.
     """
     records = load_jsonl(dataset_path)
-    cases = build_cases(records, dataset_path)
+    all_cases = build_cases(records, dataset_path)
+
+    if sample_size is not None:
+        if sample_size <= 0:
+            raise ValueError("sample_size pozitif bir integer olmalı.")
+        cases = all_cases[:sample_size]
+    else:
+        cases = all_cases
 
     print("\n" + "=" * 80)
     print(f"{split_name.upper()} RETRIEVAL EVALUATION")
     print("=" * 80)
     print(f"Dataset : {dataset_path}")
-    print(f"Case    : {len(cases)}")
+    if sample_size is not None:
+        print(f"Case    : {len(cases)} / {len(all_cases)} sampled")
+    else:
+        print(f"Case    : {len(cases)}")
     print(f"Top-K   : {limit}")
 
     top_1_correct = 0
     top_k_correct = 0
+    reciprocal_rank_sum = 0.0
     failures: list[dict[str, Any]] = []
 
     for index, test_case in enumerate(cases, start=1):
@@ -225,6 +249,7 @@ def evaluate_split(
 
         if case_result["top_k_match"]:
             top_k_correct += 1
+            reciprocal_rank_sum += float(case_result["reciprocal_rank"])
         elif len(failures) < max_failures:
             failures.append(case_result)
 
@@ -235,8 +260,11 @@ def evaluate_split(
         split_name=split_name,
         dataset_path=dataset_path,
         total=len(cases),
+        total_available=len(all_cases),
+        sample_size=sample_size,
         top_1_correct=top_1_correct,
         top_k_correct=top_k_correct,
+        reciprocal_rank_sum=reciprocal_rank_sum,
         limit=limit,
         failures=failures,
     )
@@ -247,10 +275,13 @@ def evaluate_split(
 
 def print_split_summary(result: SplitEvaluationResult) -> None:
     print("\nSonuç:")
+    if result.sample_size is not None:
+        print(f"Örneklem         : {result.total}/{result.total_available}")
     print(f"Top-1 doğru      : {result.top_1_correct}/{result.total}")
     print(f"Top-{result.limit} doğru      : {result.top_k_correct}/{result.total}")
     print(f"Top-1 Accuracy   : {result.top_1_accuracy:.4f}")
     print(f"Top-{result.limit} Accuracy   : {result.top_k_accuracy:.4f}")
+    print(f"MRR              : {result.mrr:.4f}")
 
     if not result.failures:
         return
@@ -271,6 +302,7 @@ def evaluate_configured_splits(
     split: str = "all",
     limit: int = 5,
     max_failures: int = 10,
+    sample_size: int | None = None,
 ) -> list[SplitEvaluationResult]:
     """
     Config'teki validation/test splitleri için evaluation çalıştırır.
@@ -296,6 +328,7 @@ def evaluate_configured_splits(
             dataset_path=dataset_path,
             limit=limit,
             max_failures=max_failures,
+            sample_size=sample_size,
         )
         for split_name, dataset_path in selected_splits
     ]
@@ -310,19 +343,25 @@ def print_overall_summary(results: list[SplitEvaluationResult]) -> None:
     total = sum(result.total for result in results)
     top_1_correct = sum(result.top_1_correct for result in results)
     top_k_correct = sum(result.top_k_correct for result in results)
+    reciprocal_rank_sum = sum(result.reciprocal_rank_sum for result in results)
     limit = results[0].limit if results else 5
 
     top_1_accuracy = top_1_correct / total if total else 0.0
     top_k_accuracy = top_k_correct / total if total else 0.0
+    mrr = reciprocal_rank_sum / total if total else 0.0
 
     print("\n" + "#" * 80)
     print("GENEL SPLIT RETRIEVAL DEĞERLENDİRMESİ")
     print("#" * 80)
     print(f"Toplam case       : {total}")
+    if any(result.sample_size is not None for result in results):
+        total_available = sum(result.total_available for result in results)
+        print(f"Örneklem          : {total}/{total_available}")
     print(f"Top-1 doğru       : {top_1_correct}/{total}")
     print(f"Top-{limit} doğru       : {top_k_correct}/{total}")
     print(f"Top-1 Accuracy    : {top_1_accuracy:.4f}")
     print(f"Top-{limit} Accuracy    : {top_k_accuracy:.4f}")
+    print(f"MRR               : {mrr:.4f}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -347,6 +386,12 @@ def parse_args() -> argparse.Namespace:
         default=10,
         help="Her split için ekrana basılacak maksimum başarısız örnek sayısı.",
     )
+    parser.add_argument(
+        "--sample-size",
+        type=int,
+        default=None,
+        help="Her split için değerlendirilecek ilk N kayıt. Verilmezse tüm split çalışır.",
+    )
     return parser.parse_args()
 
 
@@ -356,4 +401,5 @@ if __name__ == "__main__":
         split=args.split,
         limit=args.limit,
         max_failures=args.max_failures,
+        sample_size=args.sample_size,
     )
