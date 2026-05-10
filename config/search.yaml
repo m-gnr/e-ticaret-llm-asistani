@@ -3,6 +3,11 @@ search:
   max_limit: 20
   similarity_metric: "cosine"
   min_similarity_score: 0.30
+  enable_fallback_search: true
+  fallback_relax_attributes: true
+  fallback_relax_price_stock: false
+  fallback_keep_source_tables: true
+  fallback_keep_model_filter: true
 
 query_parser:
   enable_price_filter: true

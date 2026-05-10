@@ -22,6 +22,9 @@ class ParsedQuery:
     brand: str | None = None
     status: str | None = None
     model_filter: str | None = None
+    order_no: str | None = None
+    tracking_no: str | None = None
+    coupon_code: str | None = None
     sort_by: str | None = None
     sort_direction: str | None = None
     attribute_filters: dict[str, str | int | float | bool] = field(default_factory=dict)
@@ -634,6 +637,68 @@ def extract_rating_equals(text: str) -> int | None:
     return None
 
 
+def extract_order_no(text: str) -> str | None:
+    match = re.search(r"\bsip-\d{4}-\d{4}\b", text, flags=re.IGNORECASE)
+    if match:
+        return match.group(0).upper()
+
+    return None
+
+
+def extract_tracking_no(text: str) -> str | None:
+    match = re.search(
+        r"\b(?:ar|yk|mng|ptt|sürat|surat)\d{6}\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        return match.group(0).upper()
+
+    return None
+
+
+def extract_coupon_code(text: str) -> str | None:
+    coupon_indicators = [
+        "kupon",
+        "kuponu",
+        "indirim kodu",
+        "kodu",
+        "geçerli mi",
+        "gecerli mi",
+        "kampanya kodu",
+    ]
+    if not any(indicator in text for indicator in coupon_indicators):
+        return None
+
+    stop_words = {
+        "kupon",
+        "kuponu",
+        "indirim",
+        "kodu",
+        "kod",
+        "gecerli",
+        "geçerli",
+        "kampanya",
+    }
+    patterns = [
+        r"\b(?:kupon kodu|indirim kodu|kampanya kodu|kod)\s+([a-zçğıöşü0-9]{3,20})\b",
+        r"\b([a-zçğıöşü0-9]{3,20})\s+(?:kuponu|kupon|indirim kodu|kampanya kodu|kodu)\b",
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if not match:
+            continue
+
+        candidate = match.group(1)
+        if candidate.lower() in stop_words:
+            continue
+
+        return candidate.upper()
+
+    return None
+
+
 def detect_intent(text: str) -> str | None:
     for intent, keywords in INTENT_KEYWORDS.items():
         if any(keyword in text for keyword in keywords):
@@ -737,16 +802,34 @@ def parse_query(query: str) -> ParsedQuery:
     brand = detect_brand(normalized)
     status = detect_status(normalized)
     model_filter = detect_model_filter(normalized)
+    order_no = extract_order_no(normalized)
+    tracking_no = extract_tracking_no(normalized)
+    coupon_code = extract_coupon_code(normalized)
     if category is None:
         category = infer_category_from_model_filter(model_filter)
 
     attribute_filters = extract_attribute_filters(normalized)
     search_text = clean_search_text(normalized)
-    intent = detect_intent(normalized)
+    if coupon_code is not None:
+        intent = "coupon"
+    elif tracking_no is not None:
+        intent = "cargo"
+    elif order_no is not None:
+        intent = "order"
+    else:
+        intent = detect_intent(normalized)
+
     if intent is None and (category or brand or model_filter or attribute_filters):
         intent = "product"
 
     source_tables = INTENT_TABLES.get(intent, [])
+    if coupon_code is not None:
+        source_tables = ["kuponlar"]
+    elif tracking_no is not None:
+        source_tables = ["kargolar"]
+    elif order_no is not None:
+        source_tables = ["siparisler"]
+
     sort_by, sort_direction = detect_sort_intent(normalized)
 
     return ParsedQuery(
@@ -765,6 +848,9 @@ def parse_query(query: str) -> ParsedQuery:
         brand=brand,
         status=status,
         model_filter=model_filter,
+        order_no=order_no,
+        tracking_no=tracking_no,
+        coupon_code=coupon_code,
         sort_by=sort_by,
         sort_direction=sort_direction,
         attribute_filters=attribute_filters,
