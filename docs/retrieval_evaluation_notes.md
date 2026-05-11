@@ -121,3 +121,19 @@ python -m src.evaluation.evaluate_split_retrieval --split test --evaluation-mode
 python -m src.evaluation.evaluate_split_retrieval --split validation --evaluation-mode metadata --limit 5
 python -m src.evaluation.evaluate_split_retrieval --split test --evaluation-mode metadata --limit 5
 ```
+
+## Tokenizer Demo
+
+Tokenization, kullanıcı sorgusunu modelin işleyebileceği küçük parçalara ayırma işlemidir. Bu parçaların her birine token denir. Tokenizer, her token’ı modelin vocabulary adı verilen sözlüğündeki bir sayısal karşılığa dönüştürür. Bu sayıya token ID denir.
+
+Attention mask, modelin hangi pozisyonlara dikkat edeceğini gösterir. Değer `1` ise gerçek token vardır; değer `0` ise padding alanıdır ve model bu pozisyonu dikkate almaz. Padding, kısa metinleri sabit uzunluğa tamamlamak için kullanılır. Truncation ise çok uzun metinleri belirlenen maksimum uzunlukta keser.
+
+GUI’deki “Tokenizer Demo” bölümü, aranan sorgunun token listesini, token ID değerlerini, attention mask bilgisini, vocabulary size değerini ve padding sayılarını gösterir.
+
+Örnek sorgu:
+
+```text
+1000 TL altı stokta olan kablosuz kulaklık öner
+```
+
+Bu sorgu tokenizer tarafından tokenlara ayrılır, her token model sözlüğündeki token ID’ye dönüştürülür ve attention mask ile gerçek token / padding ayrımı yapılır. Böylece tokenizer aşaması hem kodda hem de Windows XP temalı GUI içinde uygulamalı olarak görülebilir.
