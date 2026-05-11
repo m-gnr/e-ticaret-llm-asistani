@@ -3,6 +3,7 @@ from typing import Any
 import csv
 import html
 import json
+import random
 import re
 import sys
 
@@ -13,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.app.answer_generator import generate_answer
-from src.config_loader import get_project_root
+from src.config_loader import get_project_root, load_yaml_config
 from src.embedding.tokenizer_demo import analyze_tokenization
 from src.search.query_parser import parse_query
 from src.search.semantic_search import semantic_search
@@ -23,17 +24,6 @@ ROVER_IDLE = PROJECT_ROOT / "ui" / "assets" / "rover" / "rover_idle.gif"
 ROVER_SEARCHING = PROJECT_ROOT / "ui" / "assets" / "rover" / "rover_searching.gif"
 ROVER_RESULT = PROJECT_ROOT / "ui" / "assets" / "rover" / "rover_result.gif"
 ROVER_NOT_FOUND = PROJECT_ROOT / "ui" / "assets" / "rover" / "rover_not_found.gif"
-
-
-EXAMPLE_QUERIES = [
-    "1000 TL altı stokta olan kablosuz kulaklık öner",
-    "teslim edilen kargoları listele",
-    "yüksek puanlı ayakkabı yorumları",
-    "Samsung marka telefonları göster",
-    "hasarlı gelen ürün iadelerini göster",
-    "oyuncu mouse öner",
-    "stokta olmayan ürünleri listele",
-]
 
 
 def inject_css() -> None:
@@ -632,6 +622,74 @@ def inject_css() -> None:
                 margin-bottom: 10px;
             }
 
+            div[data-testid="stVerticalBlock"]:has(.tokenizer-examples-marker) {
+                background: #f5f2df;
+                border: 1px solid #aca899;
+                box-shadow: inset 1px 1px white;
+                padding: 10px 12px 12px 12px;
+                margin: 12px 0;
+                box-sizing: border-box;
+                gap: 0.45rem;
+            }
+
+            div[data-testid="stVerticalBlock"]:has(.tokenizer-examples-marker) div[data-testid="stButton"] {
+                margin-top: 6px;
+                margin-bottom: 2px;
+                position: static !important;
+                transform: none !important;
+            }
+
+            div[data-testid="stVerticalBlock"]:has(.tokenizer-examples-marker) div[data-testid="stButton"] button {
+                position: static !important;
+                transform: none !important;
+                float: none !important;
+                clear: both;
+            }
+
+            .tokenizer-examples-title {
+                color: #1f3763;
+                font-size: 13px;
+                font-weight: bold;
+                line-height: 1.2;
+                margin-bottom: 6px;
+            }
+
+            .tokenizer-examples-description {
+                display: block;
+                color: #222;
+                font-size: 13px;
+                line-height: 1.4;
+                margin-bottom: 8px;
+            }
+
+            .tokenizer-selected-text {
+                background: #fffef2;
+                border: 1px solid #c8c2a4;
+                color: #222;
+                font-size: 12px;
+                line-height: 1.45;
+                padding: 8px 9px;
+                margin: 12px 0 10px 0;
+                box-shadow: inset 1px 1px white;
+                word-break: break-word;
+            }
+
+            .tokenizer-selected-label {
+                color: #1f3763;
+                font-weight: bold;
+                margin-bottom: 4px;
+            }
+
+            div[data-testid="stVerticalBlock"]:has(.tokenizer-actions-marker) {
+                margin: 8px 0 12px 0;
+                gap: 0.4rem;
+            }
+
+            div[data-testid="stVerticalBlock"]:has(.tokenizer-actions-marker) div[data-testid="stButton"] {
+                margin-top: 8px;
+                margin-bottom: 12px;
+            }
+
             .tokenizer-summary-table,
             .tokenizer-token-table {
                 width: 100%;
@@ -678,6 +736,18 @@ def inject_css() -> None:
                 line-height: 1.5;
                 box-shadow: inset 1px 1px white;
                 margin-bottom: 12px;
+            }
+
+            .xp-demo-selected {
+                background: #fffef2;
+                border: 1px solid #c8c2a4;
+                color: #222;
+                font-size: 12px;
+                line-height: 1.45;
+                padding: 7px 8px;
+                margin-top: 8px;
+                box-shadow: inset 1px 1px white;
+                word-break: break-word;
             }
 
             .xp-page-title {
@@ -784,6 +854,9 @@ def init_session_state() -> None:
         "query_input": "",
         "tokenizer_input": "1000 TL altı stokta olan kablosuz kulaklık öner",
         "tokenizer_analysis": None,
+        "demo_search_category": "Ürün",
+        "selected_search_example": "",
+        "selected_tokenizer_example": "",
         "pending_query": "",
         "pending_limit": 5,
         "search_in_progress": False,
@@ -803,6 +876,74 @@ def init_session_state() -> None:
 
 def set_active_page(page: str) -> None:
     st.session_state.active_page = page
+
+
+def load_demo_queries() -> dict[str, Any]:
+    try:
+        return load_yaml_config("config/demo_queries.yaml")
+    except FileNotFoundError:
+        return {}
+
+
+def get_search_example_groups() -> dict[str, dict[str, Any]]:
+    config = load_demo_queries()
+    groups = config.get("search_examples", {})
+    return groups if isinstance(groups, dict) else {}
+
+
+def get_tokenizer_examples() -> list[str]:
+    config = load_demo_queries()
+    tokenizer_examples = config.get("tokenizer_examples", {})
+    if not isinstance(tokenizer_examples, dict):
+        return []
+
+    queries = tokenizer_examples.get("queries", [])
+    return [str(query) for query in queries] if isinstance(queries, list) else []
+
+
+def pick_random_query(queries: list[str], previous: str | None = None) -> str:
+    if not queries:
+        return ""
+
+    if len(queries) == 1:
+        return queries[0]
+
+    candidates = [query for query in queries if query != previous]
+    return random.choice(candidates or queries)
+
+
+def pick_random_search_query() -> None:
+    groups = get_search_example_groups()
+    selected_label = st.session_state.get("demo_search_category")
+    selected_group = next(
+        (
+            group
+            for group in groups.values()
+            if isinstance(group, dict) and group.get("label") == selected_label
+        ),
+        None,
+    )
+
+    queries = selected_group.get("queries", []) if isinstance(selected_group, dict) else []
+    queries = [str(query) for query in queries] if isinstance(queries, list) else []
+    selected_query = pick_random_query(
+        queries,
+        previous=st.session_state.get("selected_search_example"),
+    )
+    if selected_query:
+        st.session_state.query_input = selected_query
+        st.session_state.selected_search_example = selected_query
+
+
+def pick_random_tokenizer_query() -> None:
+    selected_query = pick_random_query(
+        get_tokenizer_examples(),
+        previous=st.session_state.get("selected_tokenizer_example"),
+    )
+    if selected_query:
+        st.session_state.tokenizer_input = selected_query
+        st.session_state.selected_tokenizer_example = selected_query
+        st.session_state.tokenizer_analysis = None
 
 
 def clear_search_state() -> None:
@@ -918,6 +1059,8 @@ def render_left_panel() -> tuple[str, int, bool, bool]:
             key="query_input",
         )
 
+        render_search_demo_queries_panel()
+
         st.markdown('<div class="xp-form-section-label">Sonuç sayısı</div>', unsafe_allow_html=True)
         result_limit = st.selectbox("Sonuç sayısı", options=[3, 5, 10], index=1, label_visibility="collapsed")
 
@@ -930,22 +1073,53 @@ def render_left_panel() -> tuple[str, int, bool, bool]:
         with search_col:
             search_clicked = st.button("Ara", use_container_width=True)
 
-    st.markdown(
-        """
-        <div class="example-box">
-            <div class="example-title">Örnek sorgular</div>
-            <div>→ 1000 TL altı stokta olan kablosuz kulaklık öner</div>
-            <div>→ teslim edilen kargoları listele</div>
-            <div>→ yüksek puanlı ayakkabı yorumları</div>
-            <div>→ hasarlı gelen ürün iadelerini göster</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     st.image(str(rover_image), width=135)
 
     return query, result_limit, search_clicked and bool(query.strip()), show_debug
+
+
+def render_search_demo_queries_panel() -> None:
+    groups = get_search_example_groups()
+    if not groups:
+        render_xp_warning("Demo query config bulunamadı.")
+        return
+
+    labels = [
+        str(group.get("label"))
+        for group in groups.values()
+        if isinstance(group, dict) and group.get("label")
+    ]
+    if not labels:
+        render_xp_warning("Demo query config bulunamadı.")
+        return
+
+    if st.session_state.demo_search_category not in labels:
+        st.session_state.demo_search_category = labels[0]
+
+    st.markdown('<div class="xp-form-section-label">Demo Queries</div>', unsafe_allow_html=True)
+    st.selectbox(
+        "Demo Queries",
+        options=labels,
+        key="demo_search_category",
+        label_visibility="collapsed",
+    )
+    st.button(
+        "Rastgele Örnek Getir",
+        key="pick_search_demo_query",
+        use_container_width=True,
+        on_click=pick_random_search_query,
+    )
+
+    selected_query = st.session_state.get("selected_search_example")
+    if selected_query:
+        st.markdown(
+            f"""
+            <div class="xp-demo-selected">
+                <b>Seçilen örnek:</b><br>{html.escape(str(selected_query))}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def format_answer_html(answer: str) -> str:
@@ -1179,14 +1353,6 @@ def render_tokenizer_left_panel() -> None:
     )
 
 
-def set_tokenizer_example(text: str) -> None:
-    st.session_state.tokenizer_input = text
-    try:
-        st.session_state.tokenizer_analysis = analyze_tokenization(text)
-    except Exception:
-        st.session_state.tokenizer_analysis = None
-
-
 def render_tokenizer_page() -> None:
     left_col, right_col = st.columns([0.88, 2.35], gap="small")
 
@@ -1211,52 +1377,66 @@ def render_tokenizer_page() -> None:
             label_visibility="collapsed",
             height=72,
         )
-        example_col1, example_col2, example_col3 = st.columns(3, gap="small")
-        with example_col1:
-            st.button(
-                "Örnek: Kulaklık sorgusu",
-                key="tokenizer_example_product",
-                use_container_width=True,
-                on_click=set_tokenizer_example,
-                args=("1000 TL altı stokta olan kablosuz kulaklık öner",),
+
+        if not get_tokenizer_examples():
+            render_xp_warning("Demo query config bulunamadı.")
+
+        with st.container():
+            st.markdown(
+                """
+                <span class="tokenizer-examples-marker"></span>
+                <div class="tokenizer-examples-title">Tokenizer Examples</div>
+                <div class="tokenizer-examples-description">
+                    Sadece metin kutusunu doldurur; analiz için Tokenize Et butonuna basın.
+                </div>
+                """,
+                unsafe_allow_html=True,
             )
-        with example_col2:
             st.button(
-                "Örnek: Sipariş sorgusu",
-                key="tokenizer_example_order",
-                use_container_width=True,
-                on_click=set_tokenizer_example,
-                args=("SIP-2026-0007 numaralı sipariş",),
-            )
-        with example_col3:
-            st.button(
-                "Örnek: Kupon sorgusu",
-                key="tokenizer_example_coupon",
-                use_container_width=True,
-                on_click=set_tokenizer_example,
-                args=("KARGO0 kuponu geçerli mi",),
+                "Rastgele Metin Getir",
+                key="pick_tokenizer_demo_query",
+                use_container_width=False,
+                on_click=pick_random_tokenizer_query,
             )
 
-        show_padding_tokens = st.checkbox(
-            "Padding tokenlarını göster",
-            value=False,
-            key="show_padding_tokens",
-        )
+        selected_tokenizer_query = st.session_state.get("selected_tokenizer_example")
+        if selected_tokenizer_query:
+            st.markdown(
+                f"""
+                <div class="tokenizer-selected-text">
+                    <div class="tokenizer-selected-label">Seçilen metin:</div>
+                    <div>{html.escape(str(selected_tokenizer_query))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        if st.button("Tokenize Et", key="tokenize_button"):
-            try:
-                st.session_state.tokenizer_analysis = analyze_tokenization(text)
-            except Exception:
-                st.session_state.tokenizer_analysis = None
-                render_xp_warning("Tokenizer yüklenemedi. Model dosyalarını kontrol edin.")
-                return
+        with st.container():
+            st.markdown('<span class="tokenizer-actions-marker"></span>', unsafe_allow_html=True)
+            show_padding_tokens = st.checkbox(
+                "Padding tokenlarını göster",
+                value=False,
+                key="show_padding_tokens",
+            )
+
+            if st.button("Tokenize Et", key="tokenize_button"):
+                try:
+                    st.session_state.tokenizer_analysis = analyze_tokenization(text)
+                except Exception:
+                    st.session_state.tokenizer_analysis = None
+                    render_xp_warning("Tokenizer yüklenemedi. Model dosyalarını kontrol edin.")
+                    return
 
         if st.session_state.tokenizer_analysis is None:
-            try:
-                st.session_state.tokenizer_analysis = analyze_tokenization(text)
-            except Exception:
-                render_xp_warning("Tokenizer yüklenemedi. Model dosyalarını kontrol edin.")
-                return
+            st.markdown(
+                """
+                <div class="xp-info-panel">
+                    Token tablosunu görmek için metni yazın veya rastgele örnek getirin, ardından Tokenize Et butonuna basın.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            return
 
         render_tokenizer_analysis(st.session_state.tokenizer_analysis, show_padding_tokens)
 
